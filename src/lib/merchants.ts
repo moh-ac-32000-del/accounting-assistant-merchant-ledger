@@ -19,7 +19,9 @@ export function subscribeToMerchants(
     orderBy("createdAt", "desc"),
   );
   return onSnapshot(q, (snapshot) => {
-    const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as Merchant));\n    items.sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")));\n    callback(items);
+    const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as Merchant));
+    items.sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")));
+    callback(items);
   });
 }
 

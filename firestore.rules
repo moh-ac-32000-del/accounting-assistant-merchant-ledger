@@ -5,9 +5,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function membership(workspaceId) {
+      return get(/databases/$(database)/documents/memberships/$(workspaceId + "_" + request.auth.uid));
+    }
+
     function isMember(workspaceId) {
       return signedIn() &&
         exists(/databases/$(database)/documents/memberships/$(workspaceId + "_" + request.auth.uid));
+    }
+
+    function isManager(workspaceId) {
+      return isMember(workspaceId) &&
+        membership(workspaceId).data.role in ["owner", "admin"];
     }
 
     function isOwner(workspaceId) {
@@ -15,46 +24,112 @@ service cloud.firestore {
         get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
     }
 
+    function validCurrency(value) {
+      return value in ["TRY", "USD"];
+    }
+
+    function validMerchant(data, workspaceId) {
+      return data.workspaceId == workspaceId &&
+        data.name is string &&
+        data.name.size() > 0 &&
+        data.defaultCurrency is string &&
+        validCurrency(data.defaultCurrency) &&
+        data.status in ["active", "archived"];
+    }
+
+    function validMaterial(data, workspaceId) {
+      return data.workspaceId == workspaceId &&
+        data.name is string &&
+        data.name.size() > 0 &&
+        data.aliases is list &&
+        data.defaultPrice is number &&
+        data.defaultPrice >= 0 &&
+        data.currency is string &&
+        validCurrency(data.currency) &&
+        data.active is bool;
+    }
+
+    function validTransactionBase(data, workspaceId, merchantId) {
+      return data.workspaceId == workspaceId &&
+        data.merchantId == merchantId &&
+        data.type in ["purchase", "payment"] &&
+        data.date is string &&
+        data.date.size() == 10 &&
+        data.currency is string &&
+        validCurrency(data.currency) &&
+        data.createdBy is string &&
+        data.updatedBy is string;
+    }
+
+    function validPurchase(data, workspaceId, merchantId) {
+      return validTransactionBase(data, workspaceId, merchantId) &&
+        data.type == "purchase" &&
+        data.materialNameSnapshot is string &&
+        data.materialNameSnapshot.size() > 0 &&
+        data.quantity is number &&
+        data.quantity > 0 &&
+        data.unitPrice is number &&
+        data.unitPrice >= 0 &&
+        data.total is number &&
+        data.total == data.quantity * data.unitPrice;
+    }
+
+    function validPayment(data, workspaceId, merchantId) {
+      return validTransactionBase(data, workspaceId, merchantId) &&
+        data.type == "payment" &&
+        data.paymentMethod is string &&
+        data.paymentMethod.size() > 0 &&
+        data.amount is number &&
+        data.amount > 0;
+    }
+
     match /workspaces/{workspaceId} {
       allow read: if isMember(workspaceId);
-      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow create: if signedIn() &&
+        request.resource.data.ownerId == request.auth.uid;
       allow update: if isOwner(workspaceId);
       allow delete: if false;
 
       match /merchants/{merchantId} {
         allow read: if isMember(workspaceId);
-        allow create: if isMember(workspaceId) &&
-          request.resource.data.workspaceId == workspaceId;
-        allow update: if isMember(workspaceId) &&
+        allow create: if isManager(workspaceId) &&
+          validMerchant(request.resource.data, workspaceId);
+        allow update: if isManager(workspaceId) &&
           resource.data.workspaceId == workspaceId &&
-          request.resource.data.workspaceId == workspaceId;
+          validMerchant(request.resource.data, workspaceId);
         allow delete: if false;
 
         match /transactions/{transactionId} {
           allow read: if isMember(workspaceId);
-          allow create: if isMember(workspaceId) &&
-            request.resource.data.workspaceId == workspaceId &&
-            request.resource.data.merchantId == merchantId;
-          allow update: if isMember(workspaceId) &&
+          allow create: if isManager(workspaceId) &&
+            (
+              validPurchase(request.resource.data, workspaceId, merchantId) ||
+              validPayment(request.resource.data, workspaceId, merchantId)
+            );
+          allow update: if isManager(workspaceId) &&
             resource.data.workspaceId == workspaceId &&
-            request.resource.data.workspaceId == workspaceId &&
-            request.resource.data.merchantId == merchantId;
-          allow delete: if isMember(workspaceId) && resource.data.workspaceId == workspaceId;
+            (
+              validPurchase(request.resource.data, workspaceId, merchantId) ||
+              validPayment(request.resource.data, workspaceId, merchantId)
+            );
+          allow delete: if isManager(workspaceId) &&
+            resource.data.workspaceId == workspaceId;
         }
       }
 
       match /materials/{materialId} {
         allow read: if isMember(workspaceId);
-        allow create, update: if isMember(workspaceId) &&
-          request.resource.data.workspaceId == workspaceId;
+        allow create, update: if isManager(workspaceId) &&
+          validMaterial(request.resource.data, workspaceId);
         allow delete: if false;
       }
 
       match /auditEvents/{eventId} {
         allow read: if isMember(workspaceId);
-        allow create: if isMember(workspaceId) &&
+        allow create: if isManager(workspaceId) &&
           request.resource.data.workspaceId == workspaceId &&
-          request.resource.data.actorId == request.auth.uid;
+          request.resource.data.actorId == request.auth.uid &&
+          request.resource.data.action in ["created", "updated", "deleted", "archived", "restored"];
         allow update, delete: if false;
       }
     }

@@ -35,6 +35,15 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  async function handleGoogleSignIn() {
+    setError("");
+    try {
+      await signInWithGoogle();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "تعذر تسجيل الدخول باستخدام Google.");
+    }
+  }
+
   useEffect(() => subscribeToAuth(setUser), []);
 
   useEffect(() => {
@@ -135,7 +144,7 @@ export function App() {
   }
 
   if (!firebaseConfigured) return <main className="app-shell"><section className="welcome-card"><span className="eyebrow">Merchant Ledger</span><h1>التهيئة مطلوبة</h1><p>أضف إعدادات Firebase في بيئة التشغيل قبل تفعيل التخزين السحابي.</p></section></main>;
-  if (!user) return <main className="app-shell"><section className="welcome-card"><span className="eyebrow">Merchant Ledger</span><h1>حسابات التجار</h1><p>سجّل الدخول بحساب Google للوصول إلى بياناتك السحابية.</p><button className="primary" onClick={() => signInWithGoogle()}>الدخول باستخدام Google</button></section></main>;
+  if (!user) return <main className="app-shell"><section className="welcome-card"><span className="eyebrow">Merchant Ledger</span><h1>حسابات التجار</h1><p>سجّل الدخول بحساب Google للوصول إلى بياناتك السحابية.</p>{error && <div className="error">{error}</div>}<button className="primary" onClick={handleGoogleSignIn}>الدخول باستخدام Google</button></section></main>;
 
   if (selectedMerchant) return <main className="app-shell"><section className="dashboard">
     <header className="topbar"><div><button className="ghost" onClick={() => setSelectedMerchant(null)}>← التجار</button><span className="eyebrow">حساب التاجر</span><h1>{selectedMerchant.name}</h1></div><button className="ghost" onClick={() => signOutUser()}>خروج</button></header>

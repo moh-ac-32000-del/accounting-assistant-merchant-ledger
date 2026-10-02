@@ -1,0 +1,72 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(workspaceId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/memberships/$(workspaceId + "_" + request.auth.uid));
+    }
+
+    function isOwner(workspaceId) {
+      return isMember(workspaceId) &&
+        get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
+    }
+
+    match /workspaces/{workspaceId} {
+      allow read: if isMember(workspaceId);
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isOwner(workspaceId);
+      allow delete: if false;
+
+      match /merchants/{merchantId} {
+        allow read: if isMember(workspaceId);
+        allow create: if isMember(workspaceId) &&
+          request.resource.data.workspaceId == workspaceId;
+        allow update: if isMember(workspaceId) &&
+          resource.data.workspaceId == workspaceId &&
+          request.resource.data.workspaceId == workspaceId;
+        allow delete: if false;
+
+        match /transactions/{transactionId} {
+          allow read: if isMember(workspaceId);
+          allow create: if isMember(workspaceId) &&
+            request.resource.data.workspaceId == workspaceId &&
+            request.resource.data.merchantId == merchantId;
+          allow update: if isMember(workspaceId) &&
+            resource.data.workspaceId == workspaceId &&
+            request.resource.data.workspaceId == workspaceId &&
+            request.resource.data.merchantId == merchantId;
+          allow delete: if isMember(workspaceId) && resource.data.workspaceId == workspaceId;
+        }
+      }
+
+      match /materials/{materialId} {
+        allow read: if isMember(workspaceId);
+        allow create, update: if isMember(workspaceId) &&
+          request.resource.data.workspaceId == workspaceId;
+        allow delete: if false;
+      }
+
+      match /auditEvents/{eventId} {
+        allow read: if isMember(workspaceId);
+        allow create: if isMember(workspaceId) &&
+          request.resource.data.workspaceId == workspaceId &&
+          request.resource.data.actorId == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    match /memberships/{membershipId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.role == "owner" &&
+        exists(/databases/$(database)/documents/workspaces/$(request.resource.data.workspaceId)) &&
+        get(/databases/$(database)/documents/workspaces/$(request.resource.data.workspaceId)).data.ownerId == request.auth.uid;
+      allow update, delete: if false;
+    }
+  }
+}

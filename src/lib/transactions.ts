@@ -32,7 +32,7 @@ export function subscribeToTransactions(
   callback: (transactions: Transaction[]) => void,
 ): Unsubscribe {
   if (!db) return () => undefined;
-  const q = query(transactionsCollection(workspaceId, merchantId), orderBy("date", "desc"), orderBy("createdAt", "desc"));
+  const q = query(transactionsCollection(workspaceId, merchantId), orderBy("date", "desc"));
   return onSnapshot(q, snapshot => {
     callback(snapshot.docs.map(item => ({ id: item.id, ...item.data() } as Transaction)));
   });

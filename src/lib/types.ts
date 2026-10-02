@@ -15,7 +15,19 @@ export interface Merchant {
   archivedAt?: unknown;
 }
 
-export interface Material {\n  id: string;\n  workspaceId: string;\n  name: string;\n  aliases: string[];\n  defaultPrice: number;\n  currency: Currency;\n  active: boolean;\n  createdAt: unknown;\n  updatedAt: unknown;\n}\n\nexport interface Transaction {
+export interface Material {
+  id: string;
+  workspaceId: string;
+  name: string;
+  aliases: string[];
+  defaultPrice: number;
+  currency: Currency;
+  active: boolean;
+  createdAt: unknown;
+  updatedAt: unknown;
+}
+
+export interface Transaction {
   id: string;
   workspaceId: string;
   merchantId: string;

@@ -5,7 +5,7 @@ import { getFirestore } from "firebase/firestore";
 // Firebase Web configuration confirmed from the Firebase Console.
 // These values are public client configuration, not service-account credentials.
 const firebaseConfig = {
-  apiKey: AIzaSyAl3NjX9yCrjB-Jlrz8vR9uWtJG-2lbAv4
+  apiKey: "AIzaSyAl3NjX9yCrjB-JLrz8vR9uWtJG-2lbAv4",
   authDomain: "assistant-merchant-ledger.firebaseapp.com",
   projectId: "assistant-merchant-ledger",
   storageBucket: "assistant-merchant-ledger.firebasestorage.app",

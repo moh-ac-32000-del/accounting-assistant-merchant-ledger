@@ -15,7 +15,6 @@ export async function getOrCreateWorkspace(userId: string, displayName?: string)
   const memberships = await getDocs(query(
     collection(db, "memberships"),
     where("userId", "==", userId),
-    orderBy("createdAt", "asc"),
     limit(1),
   ));
 

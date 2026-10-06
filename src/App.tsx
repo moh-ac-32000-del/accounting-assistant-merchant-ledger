@@ -41,7 +41,7 @@ export function App() {
   const [quantity, setQuantity] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("نقدي");
+  const [paymentMethod, setPaymentMethod] = useState("");
   const [transactionCurrency, setTransactionCurrency] = useState<Currency>("TRY");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -101,7 +101,8 @@ export function App() {
   useEffect(() => {
     if (!selectedMerchant) return;
     setTransactionCurrency(selectedMerchant.defaultCurrency);
-  }, [selectedMerchant?.id]);
+    setPaymentMethod(tr("cash"));
+  }, [selectedMerchant?.id, language]);
 
   const filteredMaterials = useMemo(() => {
     const q = materialName.trim().toLowerCase();
@@ -252,7 +253,7 @@ export function App() {
       summary: tr("statement"), balance: tr("balance"), purchases: tr("purchases"), payments: tr("payments"),
     })}>{tr("exportStatement")}</button></div>
     <section className="balance-grid">
-      {(["TRY","USD"] as Currency[]).map(c => <article className="balance-card" key={c}><span>{c}</span><strong>{money(balances[c].purchases - balances[c].payments, c)}</strong><small>{balances[c].purchases >= balances[c].payments ? "المتبقي للتاجر" : "رصيد لصالحك"}</small></article>)}
+      {(["TRY","USD"] as Currency[]).map(c => <article className="balance-card" key={c}><span>{c}</span><strong>{money(balances[c].purchases - balances[c].payments, c)}</strong><small>{balances[c].purchases >= balances[c].payments ? tr("owed") : tr("credit")}</small></article>)}
     </section>
     <section className="add-card"><h2>{tr("addPurchase")}</h2><div className="form-grid">
       <input list="materials" value={materialName} onChange={e => selectMaterial(e.target.value)} placeholder={tr("material")} />

@@ -1,0 +1,35 @@
+name: Firebase configuration check
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Firebase Web App configuration
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const https = require("https");
+          const source = fs.readFileSync("src/lib/firebase.ts", "utf8");
+          const projectId = source.match(/projectId:\s*"([^"]+)"/)?.[1];
+          const appId = source.match(/appId:\s*"([^"]+)"/)?.[1];
+          const apiKey = source.match(/apiKey:\s*"([^"]+)"/)?.[1];
+          if (!projectId || !appId || !apiKey) throw new Error("Firebase config could not be read.");
+          const url = "https://identitytoolkit.googleapis.com/v1/projects?firebaseAppId=" + encodeURIComponent(appId);
+          https.get(url, res => {
+            let body = "";
+            res.on("data", x => body += x);
+            res.on("end", () => {
+              if (res.statusCode !== 200) throw new Error("Identity Toolkit HTTP " + res.statusCode + ": " + body.slice(0, 500));
+              const remote = JSON.parse(body);
+              if (remote.projectId !== projectId) throw new Error("Firebase App ID resolves to a different project.");
+              if (remote.apiKey && remote.apiKey !== apiKey) throw new Error("firebase.ts API key does not match Firebase's Web App key.");
+              console.log("Firebase Web App config matches the project and App ID.");
+            });
+          }).on("error", e => { throw e; });
+          NODE

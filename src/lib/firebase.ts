@@ -2,10 +2,11 @@ import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// Firebase Web configuration confirmed from the Firebase Console.
-// These values are public client configuration, not service-account credentials.
+// Firebase Web configuration.
+// The API key is injected at build time through VITE_FIREBASE_API_KEY.
+// Firebase client API keys are project identifiers, not authorization secrets.
 const firebaseConfig = {
-  apiKey: "AIzaSyAl3NjX9yCrjB-JLrz8vR9uWtJG-2lbAv4",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
   authDomain: "assistant-merchant-ledger.firebaseapp.com",
   projectId: "assistant-merchant-ledger",
   storageBucket: "assistant-merchant-ledger.firebasestorage.app",

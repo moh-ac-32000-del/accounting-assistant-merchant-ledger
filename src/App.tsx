@@ -124,9 +124,9 @@ export function App() {
   }
 
   async function addMerchant() {
-    if (!workspaceId || !merchantName.trim()) return;
+    if (!workspaceId || !user || !merchantName.trim()) return;
     setBusy(true); setError("");
-    try { await createMerchant(workspaceId, merchantName, merchantCurrency); setMerchantName(""); }
+    try { await createMerchant(workspaceId, user.uid, merchantName, merchantCurrency); setMerchantName(""); }
     catch (e) { setError(e instanceof Error ? e.message : "تعذر إضافة التاجر."); }
     finally { setBusy(false); }
   }

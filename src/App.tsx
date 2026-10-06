@@ -61,7 +61,7 @@ export function App() {
     } catch (e) {
       const authError = e as { code?: string; message?: string };
       const code = authError.code ? ` [${authError.code}]` : "";
-      setError(`تعذر تسجيل الدخول باستخدام Google.${code} ${authError.message ?? ""}`.trim());
+      setError(`${tr("loginError")}${code}`);
     }
   }
 
@@ -127,7 +127,7 @@ export function App() {
     if (!workspaceId || !user || !merchantName.trim()) return;
     setBusy(true); setError("");
     try { await createMerchant(workspaceId, user.uid, merchantName, merchantCurrency); setMerchantName(""); }
-    catch (e) { setError(e instanceof Error ? e.message : "تعذر إضافة التاجر."); }
+    catch (e) { setError(tr("merchantError")); }
     finally { setBusy(false); }
   }
 
@@ -137,7 +137,7 @@ export function App() {
     if (!Number.isFinite(price) || price < 0) { setError("أدخل سعرًا صحيحًا للمادة."); return; }
     setBusy(true); setError("");
     try { await createMaterial(workspaceId, { name: materialName, defaultPrice: price, currency: materialCurrency }); setMaterialPrice(""); }
-    catch (e) { setError(e instanceof Error ? e.message : "تعذر إضافة المادة."); }
+    catch (e) { setError(tr("materialError")); }
     finally { setBusy(false); }
   }
 
@@ -149,7 +149,7 @@ export function App() {
     try {
       await createPurchase(workspaceId, selectedMerchant.id, user.uid, { date, currency: transactionCurrency, materialNameSnapshot: materialName, quantity: q, unitPrice: p, note });
       setQuantity(""); setUnitPrice(""); setNote("");
-    } catch (e) { setError(e instanceof Error ? e.message : "تعذر حفظ الشراء."); }
+    } catch (e) { setError(tr("transactionError")); }
     finally { setBusy(false); }
   }
 
@@ -161,7 +161,7 @@ export function App() {
     try {
       await createPayment(workspaceId, selectedMerchant.id, user.uid, { date, currency: transactionCurrency, paymentMethod, amount, note });
       setPaymentAmount(""); setNote("");
-    } catch (e) { setError(e instanceof Error ? e.message : "تعذر حفظ الدفعة."); }
+    } catch (e) { setError(tr("transactionError")); }
     finally { setBusy(false); }
   }
 
@@ -238,11 +238,11 @@ export function App() {
     }
   }
 
-  if (!firebaseConfigured) return <main className="app-shell"><section className="welcome-card"><span className="eyebrow">Merchant Ledger</span><h1>التهيئة مطلوبة</h1><p>أضف إعدادات Firebase في بيئة التشغيل قبل تفعيل التخزين السحابي.</p></section></main>;
-  if (!user) return <main className="app-shell"><section className="welcome-card"><span className="eyebrow">Merchant Ledger</span><h1>حسابات التجار</h1><p>سجّل الدخول بحساب Google للوصول إلى بياناتك السحابية.</p>{error && <div className="error">{error}</div>}<button className="primary" onClick={handleGoogleSignIn}>الدخول باستخدام Google</button></section></main>;
+  if (!firebaseConfigured) return <main className="app-shell"><section className="welcome-card"><span className="eyebrow">{tr("merchantLedger")}</span><h1>{tr("setupRequired")}</h1><p>{tr("setupDescription")}</p></section></main>;
+  if (!user) return <main className="app-shell"><section className="welcome-card"><LanguagePicker language={language} setLanguage={setLanguage} /> <span className="eyebrow">{tr("merchantLedger")}</span><h1>{tr("signInTitle")}</h1><p>{tr("signInDescription")}</p>{error && <div className="error">{error}</div>}<button className="primary" onClick={handleGoogleSignIn}>{tr("signInGoogle")}</button></section></main>;
 
   if (selectedMerchant) return <main className="app-shell"><section className="dashboard">
-    <header className="topbar"><div><button className="ghost" onClick={() => setSelectedMerchant(null)}>← التجار</button><span className="eyebrow">حساب التاجر</span><h1>{selectedMerchant.name}</h1></div><button className="ghost" onClick={() => signOutUser()}>خروج</button></header>
+    <header className="topbar"><div><button className="ghost" onClick={() => setSelectedMerchant(null)}>{tr("backToMerchants")}</button><span className="eyebrow">{tr("merchantAccount")}</span><h1>{selectedMerchant.name}</h1></div><button className="ghost" onClick={() => signOutUser()}>{tr("signOut")}</button></header>
     {error && <div className="error">{error}</div>}
     <section className="balance-grid">
       {(["TRY","USD"] as Currency[]).map(c => <article className="balance-card" key={c}><span>{c}</span><strong>{money(balances[c].purchases - balances[c].payments, c)}</strong><small>{balances[c].purchases >= balances[c].payments ? "المتبقي للتاجر" : "رصيد لصالحك"}</small></article>)}
@@ -269,7 +269,7 @@ export function App() {
   </section></main>;
 
   return <main className="app-shell"><section className="dashboard">
-    <header className="topbar"><div><span className="eyebrow">Merchant Ledger</span><h1>التجار</h1></div><button className="ghost" onClick={() => signOutUser()}>خروج</button></header>
+    <header className="topbar"><div><span className="eyebrow">Merchant Ledger</span><h1>{tr("merchants")}</h1></div><button className="ghost" onClick={() => signOutUser()}>خروج</button></header>
     {error && <div className="error">{error}</div>}
     <section className="add-card"><h2>إضافة تاجر</h2><div className="form-row">
       <input value={merchantName} onChange={e => setMerchantName(e.target.value)} placeholder="اسم التاجر" onKeyDown={e => e.key === "Enter" && addMerchant()} />

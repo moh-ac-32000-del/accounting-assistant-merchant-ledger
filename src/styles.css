@@ -8,3 +8,21 @@
 .transaction-card span{display:block;opacity:.55;margin-top:4px;font-size:.9rem}.transaction-value{text-align:end;font-weight:700}.small{padding:6px 8px;margin-inline-start:8px;font-size:.78rem}
 .merchant-open{background:none;border:0;color:inherit;text-align:start;padding:0}.merchant-open span{display:block}.merchant-open h3{font-size:1rem}
 @media(max-width:640px){.balance-grid,.form-grid{grid-template-columns:1fr}.transaction-card{align-items:flex-start}.transaction-value{font-size:.9rem}}
+
+.language-picker{display:inline-flex;align-items:center;gap:8px;margin-bottom:14px;font-size:.85rem;opacity:.9}
+.language-picker span{opacity:.65}
+.language-picker select{width:auto;min-width:120px}
+.top-actions{display:flex;align-items:center;gap:10px}
+.toolbar{display:flex;justify-content:flex-end;margin:10px 0}
+.tabs{display:flex;gap:8px;margin:14px 0}
+.tab{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#f4f6f8;border-radius:12px;padding:10px 14px}
+.active-tab{background:rgba(255,255,255,.12)}
+.section-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.edit-card{border-color:rgba(255,255,255,.18)}
+.transaction-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:7px;flex-wrap:wrap}
+.audit-badge{display:inline-block;margin-top:6px;padding:3px 7px;border-radius:8px;background:rgba(255,255,255,.08);opacity:.75}
+.audit-panel{margin-top:16px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.045);border-radius:20px;padding:18px}
+.audit-columns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.audit-columns pre{margin:0;white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.18);padding:12px;border-radius:12px;font-size:.78rem}
+.inline-empty{margin-top:10px}
+@media(max-width:640px){.top-actions{align-items:flex-end;flex-direction:column}.audit-columns{grid-template-columns:1fr}.language-picker{width:100%}.language-picker select{flex:1}}

@@ -166,10 +166,10 @@ export function App() {
   }
 
   async function removeTransaction(t: Transaction) {
-    if (!workspaceId || !user || !selectedMerchant || !window.confirm("حذف هذه العملية؟ سيتم تسجيل الحذف في سجل التدقيق.")) return;
+    if (!workspaceId || !user || !selectedMerchant || !window.confirm(tr("confirmDelete"))) return;
     setBusy(true); setError("");
     try { await deleteTransaction(workspaceId, selectedMerchant.id, user.uid, t); }
-    catch (e) { setError(e instanceof Error ? e.message : "تعذر حذف العملية."); }
+    catch (e) { setError(tr("transactionError")); }
     finally { setBusy(false); }
   }
 
@@ -247,41 +247,41 @@ export function App() {
     <section className="balance-grid">
       {(["TRY","USD"] as Currency[]).map(c => <article className="balance-card" key={c}><span>{c}</span><strong>{money(balances[c].purchases - balances[c].payments, c)}</strong><small>{balances[c].purchases >= balances[c].payments ? "المتبقي للتاجر" : "رصيد لصالحك"}</small></article>)}
     </section>
-    <section className="add-card"><h2>إضافة شراء</h2><div className="form-grid">
-      <input list="materials" value={materialName} onChange={e => selectMaterial(e.target.value)} placeholder="المادة" />
+    <section className="add-card"><h2>{tr("addPurchase")}</h2><div className="form-grid">
+      <input list="materials" value={materialName} onChange={e => selectMaterial(e.target.value)} placeholder={tr("material")} />
       <datalist id="materials">{filteredMaterials.map(m => <option key={m.id} value={m.name}>{m.defaultPrice}</option>)}</datalist>
-      <input type="number" step="any" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="الكمية" />
-      <input type="number" step="any" value={unitPrice} onChange={e => setUnitPrice(e.target.value)} placeholder="سعر الوحدة" />
+      <input type="number" step="any" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder={tr("quantity")} />
+      <input type="number" step="any" value={unitPrice} onChange={e => setUnitPrice(e.target.value)} placeholder={tr("unitPrice")} />
       <input type="date" value={date} onChange={e => setDate(e.target.value)} />
       <select value={transactionCurrency} onChange={e => setTransactionCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select>
-      <input value={note} onChange={e => setNote(e.target.value)} placeholder="ملاحظة اختيارية" />
-      <button className="primary" disabled={busy} onClick={addPurchase}>حفظ الشراء</button>
+      <input value={note} onChange={e => setNote(e.target.value)} placeholder={tr("note")} />
+      <button className="primary" disabled={busy} onClick={addPurchase}>{tr("savePurchase")}</button>
     </div></section>
-    <section className="add-card"><h2>إضافة دفعة</h2><div className="form-grid">
-      <input type="number" step="any" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder="المبلغ" />
-      <input value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} placeholder="طريقة الدفع" />
+    <section className="add-card"><h2>{tr("addPayment")}</h2><div className="form-grid">
+      <input type="number" step="any" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder={tr("amount")} />
+      <input value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} placeholder={tr("paymentMethod")} />
       <input type="date" value={date} onChange={e => setDate(e.target.value)} />
       <select value={transactionCurrency} onChange={e => setTransactionCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select>
-      <input value={note} onChange={e => setNote(e.target.value)} placeholder="ملاحظة اختيارية" />
-      <button className="primary" disabled={busy} onClick={addPayment}>حفظ الدفعة</button>
+      <input value={note} onChange={e => setNote(e.target.value)} placeholder={tr("note")} />
+      <button className="primary" disabled={busy} onClick={addPayment}>{tr("savePayment")}</button>
     </div></section>
-    <section className="merchant-list"><h2>الحركات</h2>{transactions.length === 0 ? <div className="empty">لا توجد حركات لهذا التاجر.</div> : transactions.map(t => <article className="transaction-card" key={t.id}><div><strong>{t.type === "purchase" ? "شراء" : "دفعة"}</strong><span>{t.date} · {t.type === "purchase" ? t.materialNameSnapshot : t.paymentMethod}</span></div><div className="transaction-value">{money(t.type === "purchase" ? t.total ?? 0 : t.amount ?? 0, t.currency)}<button className="ghost danger small" disabled={busy} onClick={() => removeTransaction(t)}>حذف</button></div></article>)}</section>
+    <section className="merchant-list"><h2>{tr("movements")}</h2>{transactions.length === 0 ? <div className="empty">{tr("noMovements")}</div> : transactions.map(t => <article className="transaction-card" key={t.id}><div><strong>{t.type === "purchase" ? tr("purchase") : tr("payment")}</strong><span>{t.date} · {t.type === "purchase" ? t.materialNameSnapshot : t.paymentMethod}</span></div><div className="transaction-value">{money(t.type === "purchase" ? t.total ?? 0 : t.amount ?? 0, t.currency)}<button className="ghost danger small" disabled={busy} onClick={() => removeTransaction(t)}>{tr("delete")}</button></div></article>)}</section>
   </section></main>;
 
   return <main className="app-shell"><section className="dashboard">
     <header className="topbar"><div><span className="eyebrow">Merchant Ledger</span><h1>{tr("merchants")}</h1></div><button className="ghost" onClick={() => signOutUser()}>خروج</button></header>
     {error && <div className="error">{error}</div>}
-    <section className="add-card"><h2>إضافة تاجر</h2><div className="form-row">
-      <input value={merchantName} onChange={e => setMerchantName(e.target.value)} placeholder="اسم التاجر" onKeyDown={e => e.key === "Enter" && addMerchant()} />
+    <section className="add-card"><h2>{tr("addMerchant")}</h2><div className="form-row">
+      <input value={merchantName} onChange={e => setMerchantName(e.target.value)} placeholder={tr("merchantName")} onKeyDown={e => e.key === "Enter" && addMerchant()} />
       <select value={merchantCurrency} onChange={e => setMerchantCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select>
-      <button className="primary" disabled={busy || !merchantName.trim()} onClick={addMerchant}>إضافة</button>
+      <button className="primary" disabled={busy || !merchantName.trim()} onClick={addMerchant}>{tr("add")}</button>
     </div></section>
-    <section className="add-card"><h2>المواد</h2><div className="form-row">
-      <input value={materialName} onChange={e => setMaterialName(e.target.value)} placeholder="اسم المادة" />
-      <input type="number" step="any" value={materialPrice} onChange={e => setMaterialPrice(e.target.value)} placeholder="السعر" />
-      <button className="primary" disabled={busy || !materialName.trim()} onClick={addMaterial}>إضافة مادة</button>
+    <section className="add-card"><h2>{tr("materials")}</h2><div className="form-row">
+      <input value={materialName} onChange={e => setMaterialName(e.target.value)} placeholder={tr("materialName")} />
+      <input type="number" step="any" value={materialPrice} onChange={e => setMaterialPrice(e.target.value)} placeholder={tr("price")} />
+      <button className="primary" disabled={busy || !materialName.trim()} onClick={addMaterial}>{tr("addMaterial")}</button>
     </div></section>
-    <section className="merchant-list">{merchants.length === 0 ? <div className="empty">لا يوجد تجار بعد.</div> : merchants.map(m => <article className="merchant-card" key={m.id}><button className="merchant-open" onClick={() => setSelectedMerchant(m)}><h3>{m.name}</h3><span>{m.defaultCurrency === "TRY" ? "₺" : "$"} · فتح الحساب</span></button><button className="ghost danger" onClick={() => workspaceId && archiveMerchant(workspaceId, m.id)}>أرشفة</button></article>)}</section>
+    <section className="merchant-list">{merchants.length === 0 ? <div className="empty">{tr("noMerchants")}</div> : merchants.map(m => <article className="merchant-card" key={m.id}><button className="merchant-open" onClick={() => setSelectedMerchant(m)}><h3>{m.name}</h3><span>{m.defaultCurrency === "TRY" ? "₺" : "$"} · {tr("activeMerchant")}</span></button><button className="ghost danger" onClick={() => workspaceId && archiveMerchant(workspaceId, m.id)}>{tr("archive")}</button></article>)}</section>
   </section></main>;
 }
 

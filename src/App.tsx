@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import { signInWithGoogle, signOutUser, subscribeToAuth } from "./lib/auth";
 import { firebaseConfigured } from "./lib/firebase";
-import { archiveMerchant, createMerchant, subscribeToMerchants } from "./lib/merchants";
+import { archiveMerchant, createMerchant, restoreMerchant, subscribeToArchivedMerchants, subscribeToMerchants } from "./lib/merchants";
 import { getOrCreateWorkspace } from "./lib/workspaces";
-import { createPayment, createPurchase, deleteTransaction, subscribeToTransactions } from "./lib/transactions";
+import { createPayment, createPurchase, deleteTransaction, subscribeToAuditEvents, subscribeToTransactions, updateTransaction } from "./lib/transactions";
 import { createMaterial, subscribeToMaterials } from "./lib/materials";
-import type { Currency, Material, Merchant, Transaction } from "./lib/types";
+import type { AuditEvent, Currency, Material, Merchant, Transaction } from "./lib/types";
+import { LANGUAGE_STORAGE_KEY, translations, type Language, type TranslationKey } from "./lib/i18n";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const money = (value: number, currency: Currency) =>
@@ -17,6 +18,16 @@ export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [archivedMerchants, setArchivedMerchants] = useState<Merchant[]>([]);
+  const [merchantTab, setMerchantTab] = useState<"active" | "archived">("active");
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [selectedAudit, setSelectedAudit] = useState<AuditEvent | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [language, setLanguage] = useState<Language>(() => {
+    const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    return saved === "ar" || saved === "tr" || saved === "en" ? saved : "ar";
+  });
+  const tr = (key: TranslationKey) => translations[language][key];
   const [materials, setMaterials] = useState<Material[]>([]);
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -34,6 +45,14 @@ export function App() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [editDate, setEditDate] = useState(today());
+  const [editMaterial, setEditMaterial] = useState("");
+  const [editQuantity, setEditQuantity] = useState("");
+  const [editUnitPrice, setEditUnitPrice] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editPaymentMethod, setEditPaymentMethod] = useState("");
+  const [editCurrency, setEditCurrency] = useState<Currency>("TRY");
+  const [editNote, setEditNote] = useState("");
 
   async function handleGoogleSignIn() {
     setError("");
@@ -45,6 +64,12 @@ export function App() {
       setError(`تعذر تسجيل الدخول باستخدام Google.${code} ${authError.message ?? ""}`.trim());
     }
   }
+
+  useEffect(() => {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
+  }, [language]);
 
   useEffect(() => subscribeToAuth(setUser), []);
 
@@ -60,13 +85,16 @@ export function App() {
   useEffect(() => {
     if (!workspaceId) return;
     const unsubMerchants = subscribeToMerchants(workspaceId, setMerchants);
+    const unsubArchived = subscribeToArchivedMerchants(workspaceId, setArchivedMerchants);
     const unsubMaterials = subscribeToMaterials(workspaceId, items => setMaterials(items.filter(x => x.active)));
-    return () => { unsubMerchants(); unsubMaterials(); };
+    return () => { unsubMerchants(); unsubArchived(); unsubMaterials(); };
   }, [workspaceId]);
 
   useEffect(() => {
     if (!workspaceId || !selectedMerchant) { setTransactions([]); return; }
-    return subscribeToTransactions(workspaceId, selectedMerchant.id, setTransactions);
+    const unsubTransactions = subscribeToTransactions(workspaceId, selectedMerchant.id, setTransactions);
+    const unsubAudit = subscribeToAuditEvents(workspaceId, selectedMerchant.id, setAuditEvents);
+    return () => { unsubTransactions(); unsubAudit(); };
   }, [workspaceId, selectedMerchant?.id]);
 
   useEffect(() => {

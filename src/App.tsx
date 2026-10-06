@@ -265,7 +265,30 @@ export function App() {
       <input value={note} onChange={e => setNote(e.target.value)} placeholder={tr("note")} />
       <button className="primary" disabled={busy} onClick={addPayment}>{tr("savePayment")}</button>
     </div></section>
-    <section className="merchant-list"><h2>{tr("movements")}</h2>{transactions.length === 0 ? <div className="empty">{tr("noMovements")}</div> : transactions.map(t => <article className="transaction-card" key={t.id}><div><strong>{t.type === "purchase" ? tr("purchase") : tr("payment")}</strong><span>{t.date} · {t.type === "purchase" ? t.materialNameSnapshot : t.paymentMethod}</span></div><div className="transaction-value">{money(t.type === "purchase" ? t.total ?? 0 : t.amount ?? 0, t.currency)}<button className="ghost danger small" disabled={busy} onClick={() => removeTransaction(t)}>{tr("delete")}</button></div></article>)}</section>
+    {editingTransaction && <section className="add-card edit-card">
+      <div className="section-head"><h2>{tr("editTransaction")}</h2><button className="ghost" onClick={() => setEditingTransaction(null)}>{tr("cancel")}</button></div>
+      <div className="form-grid">
+        {editingTransaction.type === "purchase" ? <>
+          <input value={editMaterial} onChange={e => setEditMaterial(e.target.value)} placeholder={tr("material")} />
+          <input type="number" step="any" value={editQuantity} onChange={e => setEditQuantity(e.target.value)} placeholder={tr("quantity")} />
+          <input type="number" step="any" value={editUnitPrice} onChange={e => setEditUnitPrice(e.target.value)} placeholder={tr("unitPrice")} />
+        </> : <>
+          <input type="number" step="any" value={editAmount} onChange={e => setEditAmount(e.target.value)} placeholder={tr("amount")} />
+          <input value={editPaymentMethod} onChange={e => setEditPaymentMethod(e.target.value)} placeholder={tr("paymentMethod")} />
+        </>}
+        <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} />
+        <select value={editCurrency} onChange={e => setEditCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select>
+        <input value={editNote} onChange={e => setEditNote(e.target.value)} placeholder={tr("note")} />
+        <button className="primary" disabled={busy} onClick={saveEdit}>{tr("saveChanges")}</button>
+      </div>
+    </section>}
+    <section className="merchant-list"><h2>{tr("movements")}</h2>{transactions.length === 0 ? <div className="empty">{tr("noMovements")}</div> : transactions.map(t => <article className="transaction-card" key={t.id}><div><strong>{t.type === "purchase" ? tr("purchase") : tr("payment")}</strong><span>{t.date} · {t.type === "purchase" ? t.materialNameSnapshot : t.paymentMethod}</span>{auditEvents.some(a => a.transactionId === t.id && a.action === "updated") && <small className="audit-badge">{tr("edited")}</small>}</div><div className="transaction-value">{money(t.type === "purchase" ? t.total ?? 0 : t.amount ?? 0, t.currency)}<div className="transaction-actions"><button className="ghost small" disabled={busy} onClick={() => openEdit(t)}>{tr("edit")}</button><button className="ghost small" onClick={() => { const a = auditEvents.find(x => x.transactionId === t.id && x.action === "updated"); if (a) setSelectedAudit(a); }} disabled={!auditEvents.some(a => a.transactionId === t.id && a.action === "updated")}>{tr("view")}</button><button className="ghost danger small" disabled={busy} onClick={() => removeTransaction(t)}>{tr("delete")}</button></div></div></article>)}</section>
+  {selectedAudit && <section className="audit-panel">
+      <div className="section-head"><h2>{tr("audit")}</h2><button className="ghost" onClick={() => setSelectedAudit(null)}>{tr("close")}</button></div>
+      <p>{selectedAudit.summary}</p>
+      <small>{tr("actor")}: {selectedAudit.actorId} · {String(selectedAudit.createdAt ?? "")}</small>
+      <div className="audit-columns"><pre>{JSON.stringify(selectedAudit.before, null, 2)}</pre><pre>{JSON.stringify(selectedAudit.after, null, 2)}</pre></div>
+    </section>}
   </section></main>;
 
   return <main className="app-shell"><section className="dashboard">
@@ -281,7 +304,8 @@ export function App() {
       <input type="number" step="any" value={materialPrice} onChange={e => setMaterialPrice(e.target.value)} placeholder={tr("price")} />
       <button className="primary" disabled={busy || !materialName.trim()} onClick={addMaterial}>{tr("addMaterial")}</button>
     </div></section>
-    <section className="merchant-list">{merchants.length === 0 ? <div className="empty">{tr("noMerchants")}</div> : merchants.map(m => <article className="merchant-card" key={m.id}><button className="merchant-open" onClick={() => setSelectedMerchant(m)}><h3>{m.name}</h3><span>{m.defaultCurrency === "TRY" ? "₺" : "$"} · {tr("activeMerchant")}</span></button><button className="ghost danger" onClick={() => workspaceId && archiveMerchant(workspaceId, m.id)}>{tr("archive")}</button></article>)}</section>
+    <div className="tabs"><button className={merchantTab === "active" ? "tab active-tab" : "tab"} onClick={() => setMerchantTab("active")}>{tr("active")} ({merchants.length})</button><button className={merchantTab === "archived" ? "tab active-tab" : "tab"} onClick={() => setMerchantTab("archived")}>{tr("archived")} ({archivedMerchants.length})</button></div>
+    <section className="merchant-list">{(merchantTab === "active" ? merchants : archivedMerchants).length === 0 ? <div className="empty">{merchantTab === "active" ? tr("noMerchants") : tr("noArchivedMerchants")}</div> : (merchantTab === "active" ? merchants : archivedMerchants).map(m => <article className="merchant-card" key={m.id}><button className="merchant-open" onClick={() => setSelectedMerchant(m)}><h3>{m.name}</h3><span>{m.defaultCurrency === "TRY" ? "₺" : "$"} · {merchantTab === "active" ? tr("activeMerchant") : tr("archivedMerchant")}</span></button><button className="ghost" disabled={busy} onClick={() => changeMerchantArchive(m, merchantTab === "archived")}>{merchantTab === "active" ? tr("archive") : tr("restore")}</button></article>)}</section>
   </section></main>;
 }
 

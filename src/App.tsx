@@ -8,6 +8,7 @@ import { createPayment, createPurchase, deleteTransaction, subscribeToAuditEvent
 import { createMaterial, subscribeToMaterials } from "./lib/materials";
 import type { AuditEvent, Currency, Material, Merchant, Transaction } from "./lib/types";
 import { LANGUAGE_STORAGE_KEY, translations, type Language, type TranslationKey } from "./lib/i18n";
+import { exportMerchantStatement } from "./lib/export";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const money = (value: number, currency: Currency) =>
@@ -244,6 +245,12 @@ export function App() {
   if (selectedMerchant) return <main className="app-shell"><section className="dashboard">
     <header className="topbar"><div><button className="ghost" onClick={() => setSelectedMerchant(null)}>{tr("backToMerchants")}</button><span className="eyebrow">{tr("merchantAccount")}</span><h1>{selectedMerchant.name}</h1></div><button className="ghost" onClick={() => signOutUser()}>{tr("signOut")}</button></header>
     {error && <div className="error">{error}</div>}
+    <div className="toolbar"><button className="ghost" onClick={() => selectedMerchant && exportMerchantStatement(selectedMerchant, transactions, {
+      date: tr("date"), type: language === "ar" ? "النوع" : language === "tr" ? "Tür" : "Type",
+      material: tr("material"), quantity: tr("quantity"), unitPrice: tr("unitPrice"), amount: tr("amount"),
+      currency: tr("currency"), note: tr("note"), purchase: tr("purchase"), payment: tr("payment"),
+      summary: tr("statement"), balance: tr("balance"), purchases: tr("purchases"), payments: tr("payments"),
+    })}>{tr("exportStatement")}</button></div>
     <section className="balance-grid">
       {(["TRY","USD"] as Currency[]).map(c => <article className="balance-card" key={c}><span>{c}</span><strong>{money(balances[c].purchases - balances[c].payments, c)}</strong><small>{balances[c].purchases >= balances[c].payments ? "المتبقي للتاجر" : "رصيد لصالحك"}</small></article>)}
     </section>

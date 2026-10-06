@@ -173,6 +173,71 @@ export function App() {
     finally { setBusy(false); }
   }
 
+  function openEdit(t: Transaction) {
+    setEditingTransaction(t);
+    setEditDate(t.date);
+    setEditCurrency(t.currency);
+    setEditMaterial(t.materialNameSnapshot ?? "");
+    setEditQuantity(t.quantity == null ? "" : String(t.quantity));
+    setEditUnitPrice(t.unitPrice == null ? "" : String(t.unitPrice));
+    setEditAmount(t.amount == null ? "" : String(t.amount));
+    setEditPaymentMethod(t.paymentMethod ?? "");
+    setEditNote(t.note ?? "");
+    setError("");
+  }
+
+  async function saveEdit() {
+    if (!workspaceId || !user || !selectedMerchant || !editingTransaction) return;
+    setBusy(true);
+    setError("");
+    try {
+      const patch = editingTransaction.type === "purchase"
+        ? {
+            date: editDate,
+            currency: editCurrency,
+            materialNameSnapshot: editMaterial,
+            quantity: Number(editQuantity),
+            unitPrice: Number(editUnitPrice),
+            note: editNote,
+          }
+        : {
+            date: editDate,
+            currency: editCurrency,
+            amount: Number(editAmount),
+            paymentMethod: editPaymentMethod,
+            note: editNote,
+          };
+      await updateTransaction(
+        workspaceId,
+        selectedMerchant.id,
+        user.uid,
+        editingTransaction.id,
+        editingTransaction,
+        patch,
+      );
+      setEditingTransaction(null);
+    } catch {
+      setError(tr("transactionError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeMerchantArchive(m: Merchant, restore: boolean) {
+    if (!workspaceId || !user) return;
+    if (!window.confirm(restore ? tr("confirmRestore") : tr("confirmArchive"))) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (restore) await restoreMerchant(workspaceId, m.id, user.uid);
+      else await archiveMerchant(workspaceId, m.id, user.uid);
+    } catch {
+      setError(tr("merchantError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!firebaseConfigured) return <main className="app-shell"><section className="welcome-card"><span className="eyebrow">Merchant Ledger</span><h1>التهيئة مطلوبة</h1><p>أضف إعدادات Firebase في بيئة التشغيل قبل تفعيل التخزين السحابي.</p></section></main>;
   if (!user) return <main className="app-shell"><section className="welcome-card"><span className="eyebrow">Merchant Ledger</span><h1>حسابات التجار</h1><p>سجّل الدخول بحساب Google للوصول إلى بياناتك السحابية.</p>{error && <div className="error">{error}</div>}<button className="primary" onClick={handleGoogleSignIn}>الدخول باستخدام Google</button></section></main>;
 

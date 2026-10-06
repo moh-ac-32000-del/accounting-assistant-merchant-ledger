@@ -284,3 +284,23 @@ export function App() {
     <section className="merchant-list">{merchants.length === 0 ? <div className="empty">لا يوجد تجار بعد.</div> : merchants.map(m => <article className="merchant-card" key={m.id}><button className="merchant-open" onClick={() => setSelectedMerchant(m)}><h3>{m.name}</h3><span>{m.defaultCurrency === "TRY" ? "₺" : "$"} · فتح الحساب</span></button><button className="ghost danger" onClick={() => workspaceId && archiveMerchant(workspaceId, m.id)}>أرشفة</button></article>)}</section>
   </section></main>;
 }
+
+
+function LanguagePicker({
+  language,
+  setLanguage,
+}: {
+  language: Language;
+  setLanguage: (language: Language) => void;
+}) {
+  return (
+    <label className="language-picker">
+      <span>{translations[language].language}</span>
+      <select value={language} onChange={event => setLanguage(event.target.value as Language)}>
+        <option value="ar">العربية</option>
+        <option value="tr">Türkçe</option>
+        <option value="en">English</option>
+      </select>
+    </label>
+  );
+}

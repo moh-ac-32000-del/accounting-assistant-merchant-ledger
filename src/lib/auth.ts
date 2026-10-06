@@ -1,7 +1,6 @@
 import {
   onAuthStateChanged,
   signInWithPopup,
-  signInWithRedirect,
   signOut,
   type User,
 } from "firebase/auth";
@@ -18,18 +17,9 @@ export function subscribeToAuth(callback: (user: User | null) => void) {
 export async function signInWithGoogle() {
   if (!auth) throw new Error("Firebase is not configured.");
 
-  // Mobile browsers commonly block or interrupt popup-based OAuth.
-  // Use the full-page redirect flow on mobile; keep the popup flow on desktop.
-  const isMobile =
-    typeof window !== "undefined" &&
-    (window.matchMedia("(max-width: 768px)").matches ||
-      /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
-
-  if (isMobile) {
-    await signInWithRedirect(auth, googleProvider);
-  } else {
-    await signInWithPopup(auth, googleProvider);
-  }
+  // The app is self-hosted on GitHub Pages. Use popup sign-in to avoid
+  // the cross-origin redirect helper/storage flow required by redirect auth.
+  await signInWithPopup(auth, googleProvider);
 }
 
 export async function signOutUser() {

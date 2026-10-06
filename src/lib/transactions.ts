@@ -1,12 +1,15 @@
 import {
-  addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query,
-  serverTimestamp, updateDoc, writeBatch, type Unsubscribe,
+  addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc,
+  writeBatch, type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { Currency, Transaction } from "./types";
+import type { AuditEvent, Currency, Transaction } from "./types";
 
 const transactionsCollection = (workspaceId: string, merchantId: string) =>
   collection(db!, "workspaces", workspaceId, "merchants", merchantId, "transactions");
+
+const auditCollection = (workspaceId: string) =>
+  collection(db!, "workspaces", workspaceId, "auditEvents");
 
 export interface PurchaseInput {
   date: string;
@@ -26,6 +29,23 @@ export interface PaymentInput {
   note?: string;
 }
 
+function validDate(value: unknown) {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function validCurrency(value: unknown): value is Currency {
+  return value === "TRY" || value === "USD";
+}
+
+function sortNewestFirst(items: Transaction[]) {
+  items.sort((a, b) => {
+    const dateCompare = b.date.localeCompare(a.date);
+    if (dateCompare) return dateCompare;
+    return String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""));
+  });
+  return items;
+}
+
 export function subscribeToTransactions(
   workspaceId: string,
   merchantId: string,
@@ -34,55 +54,122 @@ export function subscribeToTransactions(
   if (!db) return () => undefined;
   const q = query(transactionsCollection(workspaceId, merchantId), orderBy("date", "desc"));
   return onSnapshot(q, snapshot => {
-    callback(snapshot.docs.map(item => ({ id: item.id, ...item.data() } as Transaction)));
+    const items = snapshot.docs
+      .map(item => ({ id: item.id, ...item.data() } as Transaction))
+      .filter(item => item.deleted !== true);
+    callback(sortNewestFirst(items));
   });
 }
 
-export async function createPurchase(workspaceId: string, merchantId: string, userId: string, input: PurchaseInput) {
+export function subscribeToAuditEvents(
+  workspaceId: string,
+  merchantId: string,
+  callback: (events: AuditEvent[]) => void,
+): Unsubscribe {
+  if (!db) return () => undefined;
+  const q = query(auditCollection(workspaceId));
+  return onSnapshot(q, snapshot => {
+    const events = snapshot.docs
+      .map(item => ({ id: item.id, ...item.data() } as AuditEvent))
+      .filter(item => item.merchantId === merchantId);
+    events.sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")));
+    callback(events);
+  });
+}
+
+export async function createPurchase(
+  workspaceId: string,
+  merchantId: string,
+  userId: string,
+  input: PurchaseInput,
+) {
   if (!db) throw new Error("Firebase is not configured.");
-  if (!input.materialNameSnapshot.trim() || input.quantity <= 0 || input.unitPrice < 0) {
+  if (
+    !input.materialNameSnapshot.trim() ||
+    !validDate(input.date) ||
+    !validCurrency(input.currency) ||
+    !Number.isFinite(input.quantity) || input.quantity <= 0 ||
+    !Number.isFinite(input.unitPrice) || input.unitPrice < 0
+  ) {
     throw new Error("بيانات الشراء غير صالحة.");
   }
 
   const total = input.quantity * input.unitPrice;
   const batch = writeBatch(db);
   const ref = doc(transactionsCollection(workspaceId, merchantId));
-  const auditRef = doc(collection(db, "workspaces", workspaceId, "auditEvents"));
+  const auditRef = doc(auditCollection(workspaceId));
 
   batch.set(ref, {
-    workspaceId, merchantId, type: "purchase", ...input,
-    materialNameSnapshot: input.materialNameSnapshot.trim(), total,
-    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-    createdBy: userId, updatedBy: userId,
+    workspaceId,
+    merchantId,
+    type: "purchase",
+    ...input,
+    materialNameSnapshot: input.materialNameSnapshot.trim(),
+    total,
+    deleted: false,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    createdBy: userId,
+    updatedBy: userId,
   });
   batch.set(auditRef, {
-    workspaceId, merchantId, transactionId: ref.id, actorId: userId,
-    action: "created", summary: "إضافة شراء", before: null,
-    after: { ...input, total }, createdAt: serverTimestamp(),
+    workspaceId,
+    merchantId,
+    transactionId: ref.id,
+    actorId: userId,
+    action: "created",
+    summary: "إضافة شراء",
+    before: null,
+    after: { ...input, total },
+    createdAt: serverTimestamp(),
   });
 
   await batch.commit();
   return ref;
 }
 
-export async function createPayment(workspaceId: string, merchantId: string, userId: string, input: PaymentInput) {
+export async function createPayment(
+  workspaceId: string,
+  merchantId: string,
+  userId: string,
+  input: PaymentInput,
+) {
   if (!db) throw new Error("Firebase is not configured.");
-  if (!input.paymentMethod.trim() || input.amount <= 0) throw new Error("بيانات الدفع غير صالحة.");
+  if (
+    !input.paymentMethod.trim() ||
+    !validDate(input.date) ||
+    !validCurrency(input.currency) ||
+    !Number.isFinite(input.amount) || input.amount <= 0
+  ) {
+    throw new Error("بيانات الدفع غير صالحة.");
+  }
 
   const batch = writeBatch(db);
   const ref = doc(transactionsCollection(workspaceId, merchantId));
-  const auditRef = doc(collection(db, "workspaces", workspaceId, "auditEvents"));
+  const auditRef = doc(auditCollection(workspaceId));
 
   batch.set(ref, {
-    workspaceId, merchantId, type: "payment", ...input,
+    workspaceId,
+    merchantId,
+    type: "payment",
+    ...input,
     paymentMethod: input.paymentMethod.trim(),
-    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-    createdBy: userId, updatedBy: userId,
+    deleted: false,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    createdBy: userId,
+    updatedBy: userId,
   });
   batch.set(auditRef, {
-    workspaceId, merchantId, transactionId: ref.id, actorId: userId,
-    action: "created", summary: "إضافة دفعة", before: null,
-    after: input, createdAt: serverTimestamp(),
+    workspaceId,
+    merchantId,
+    transactionId: ref.id,
+    actorId: userId,
+    action: "created",
+    summary: "إضافة دفعة",
+    before: null,
+    after: input,
+    createdAt: serverTimestamp(),
   });
 
   await batch.commit();
@@ -98,18 +185,30 @@ export async function updateTransaction(
   patch: Record<string, unknown>,
 ) {
   if (!db) throw new Error("Firebase is not configured.");
+  if (before.deleted === true) throw new Error("لا يمكن تعديل عملية محذوفة.");
 
-  const next = { ...before, ...patch };
+  const next = { ...before, ...patch, deleted: false };
+  if (!validDate(next.date) || !validCurrency(next.currency)) {
+    throw new Error("التاريخ أو العملة غير صالحين.");
+  }
+
   if (next.type === "purchase") {
     const quantity = Number(next.quantity);
     const unitPrice = Number(next.unitPrice);
-    if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitPrice) || unitPrice < 0) {
+    if (
+      !Number.isFinite(quantity) || quantity <= 0 ||
+      !Number.isFinite(unitPrice) || unitPrice < 0 ||
+      typeof next.materialNameSnapshot !== "string" || !next.materialNameSnapshot.trim()
+    ) {
       throw new Error("بيانات الشراء المعدلة غير صالحة.");
     }
     next.total = quantity * unitPrice;
   } else if (next.type === "payment") {
     const amount = Number(next.amount);
-    if (!Number.isFinite(amount) || amount <= 0 || typeof next.paymentMethod !== "string" || !next.paymentMethod.trim()) {
+    if (
+      !Number.isFinite(amount) || amount <= 0 ||
+      typeof next.paymentMethod !== "string" || !next.paymentMethod.trim()
+    ) {
       throw new Error("بيانات الدفعة المعدلة غير صالحة.");
     }
   } else {
@@ -117,19 +216,28 @@ export async function updateTransaction(
   }
 
   const batch = writeBatch(db);
-  const transactionRef = doc(db, "workspaces", workspaceId, "merchants", merchantId, "transactions", transactionId);
-  const auditRef = doc(collection(db, "workspaces", workspaceId, "auditEvents"));
+  const transactionRef = doc(
+    db, "workspaces", workspaceId, "merchants", merchantId, "transactions", transactionId,
+  );
+  const auditRef = doc(auditCollection(workspaceId));
 
   batch.update(transactionRef, {
     ...patch,
     ...(next.type === "purchase" ? { total: next.total } : {}),
     updatedAt: serverTimestamp(),
     updatedBy: userId,
+    deleted: false,
   });
   batch.set(auditRef, {
-    workspaceId, merchantId, transactionId, actorId: userId,
-    action: "updated", summary: "تم تعديل العملية",
-    before, after: next, createdAt: serverTimestamp(),
+    workspaceId,
+    merchantId,
+    transactionId,
+    actorId: userId,
+    action: "updated",
+    summary: "تم تعديل العملية",
+    before,
+    after: next,
+    createdAt: serverTimestamp(),
   });
 
   await batch.commit();
@@ -142,16 +250,31 @@ export async function deleteTransaction(
   transaction: Transaction,
 ) {
   if (!db) throw new Error("Firebase is not configured.");
+  if (transaction.deleted === true) return;
 
   const batch = writeBatch(db);
-  const transactionRef = doc(db, "workspaces", workspaceId, "merchants", merchantId, "transactions", transaction.id);
-  const auditRef = doc(collection(db, "workspaces", workspaceId, "auditEvents"));
+  const transactionRef = doc(
+    db, "workspaces", workspaceId, "merchants", merchantId, "transactions", transaction.id,
+  );
+  const auditRef = doc(auditCollection(workspaceId));
 
-  batch.delete(transactionRef);
+  batch.update(transactionRef, {
+    deleted: true,
+    deletedAt: serverTimestamp(),
+    deletedBy: userId,
+    updatedAt: serverTimestamp(),
+    updatedBy: userId,
+  });
   batch.set(auditRef, {
-    workspaceId, merchantId, transactionId: transaction.id, actorId: userId,
-    action: "deleted", summary: "حذف العملية",
-    before: transaction, after: null, createdAt: serverTimestamp(),
+    workspaceId,
+    merchantId,
+    transactionId: transaction.id,
+    actorId: userId,
+    action: "deleted",
+    summary: "حذف العملية",
+    before: transaction,
+    after: null,
+    createdAt: serverTimestamp(),
   });
 
   await batch.commit();

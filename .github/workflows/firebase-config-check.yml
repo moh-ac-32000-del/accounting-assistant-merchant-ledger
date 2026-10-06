@@ -1,4 +1,4 @@
-name: Firebase configuration check
+name: Firebase authentication check
 
 on:
   push:
@@ -10,26 +10,43 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify Firebase Web App configuration
+
+      - name: Verify Firebase Web App and API key
+        shell: bash
         run: |
-          node <<'NODE'
-          const fs = require("fs");
-          const https = require("https");
-          const source = fs.readFileSync("src/lib/firebase.ts", "utf8");
-          const projectId = source.match(/projectId:\s*"([^"]+)"/)?.[1];
-          const appId = source.match(/appId:\s*"([^"]+)"/)?.[1];
-          const apiKey = source.match(/apiKey:\s*"([^"]+)"/)?.[1];
-          if (!projectId || !appId || !apiKey) throw new Error("Firebase config could not be read.");
-          const url = "https://identitytoolkit.googleapis.com/v1/projects?firebaseAppId=" + encodeURIComponent(appId);
-          https.get(url, res => {
-            let body = "";
-            res.on("data", x => body += x);
-            res.on("end", () => {
-              if (res.statusCode !== 200) throw new Error("Identity Toolkit HTTP " + res.statusCode + ": " + body.slice(0, 500));
-              const remote = JSON.parse(body);
-              if (remote.projectId !== projectId) throw new Error("Firebase App ID resolves to a different project.");
-              if (remote.apiKey && remote.apiKey !== apiKey) throw new Error("firebase.ts API key does not match Firebase's Web App key.");
-              console.log("Firebase Web App config matches the project and App ID.");
-            });
-          }).on("error", e => { throw e; });
-          NODE
+          set -euo pipefail
+
+          API_KEY="$(sed -n 's/.*apiKey: "[^"]*\|.*//p' src/lib/firebase.ts >/dev/null; grep -oP 'apiKey:\s*"\K[^"]+' src/lib/firebase.ts | head -1)"
+          PROJECT_ID="$(grep -oP 'projectId:\s*"\K[^"]+' src/lib/firebase.ts | head -1)"
+          APP_ID="$(grep -oP 'appId:\s*"\K[^"]+' src/lib/firebase.ts | head -1)"
+
+          test -n "$API_KEY"
+          test -n "$PROJECT_ID"
+          test -n "$APP_ID"
+
+          echo "Project: $PROJECT_ID"
+          echo "Firebase App ID: $APP_ID"
+          echo "API key prefix: ${API_KEY:0:10}"
+
+          CONFIG="$(curl -fsS --get             --data-urlencode "firebaseAppId=$APP_ID"             "https://identitytoolkit.googleapis.com/v1/projects")"
+
+          REMOTE_PROJECT="$(printf '%s' "$CONFIG" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).projectId||""))')"
+
+          if [ "$REMOTE_PROJECT" != "$PROJECT_ID" ]; then
+            echo "Firebase App ID resolves to: $REMOTE_PROJECT"
+            exit 1
+          fi
+
+          RESPONSE_FILE="$(mktemp)"
+          HTTP_CODE="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}'             -X POST             -H 'Content-Type: application/json'             --data '{"providerId":"google.com","continueUri":"https://moh-ac-32000-del.github.io/accounting-assistant-merchant-ledger/"}'             "https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=$API_KEY")"
+
+          echo "Identity Toolkit createAuthUri HTTP status: $HTTP_CODE"
+          cat "$RESPONSE_FILE"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            exit 1
+          fi
+
+          node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.providerId!=="google.com") process.exit(1);' "$RESPONSE_FILE"
+
+          echo "Firebase API key and Google authentication endpoint are valid.";

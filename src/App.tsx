@@ -79,7 +79,7 @@ export function App() {
     let cancelled = false;
     getOrCreateWorkspace(user.uid, user.displayName ?? undefined)
       .then(ctx => { if (!cancelled) setWorkspaceId(ctx.workspaceId); })
-      .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : "تعذر تجهيز مساحة العمل."); });
+      .catch(() => { if (!cancelled) setError(tr("merchantError")); });
     return () => { cancelled = true; };
   }, [user]);
 
@@ -135,7 +135,7 @@ export function App() {
   async function addMaterial() {
     if (!workspaceId || !materialName.trim()) return;
     const price = Number(materialPrice);
-    if (!Number.isFinite(price) || price < 0) { setError("أدخل سعرًا صحيحًا للمادة."); return; }
+    if (!Number.isFinite(price) || price < 0) { setError(tr("invalidMaterial")); return; }
     setBusy(true); setError("");
     try { await createMaterial(workspaceId, { name: materialName, defaultPrice: price, currency: materialCurrency }); setMaterialPrice(""); }
     catch (e) { setError(tr("materialError")); }
@@ -145,7 +145,7 @@ export function App() {
   async function addPurchase() {
     if (!workspaceId || !user || !selectedMerchant) return;
     const q = Number(quantity), p = Number(unitPrice);
-    if (!materialName.trim() || !Number.isFinite(q) || q <= 0 || !Number.isFinite(p) || p < 0) { setError("أدخل المادة والكمية والسعر بشكل صحيح."); return; }
+    if (!materialName.trim() || !Number.isFinite(q) || q <= 0 || !Number.isFinite(p) || p < 0) { setError(tr("invalidPurchase")); return; }
     setBusy(true); setError("");
     try {
       await createPurchase(workspaceId, selectedMerchant.id, user.uid, { date, currency: transactionCurrency, materialNameSnapshot: materialName, quantity: q, unitPrice: p, note });
@@ -157,7 +157,7 @@ export function App() {
   async function addPayment() {
     if (!workspaceId || !user || !selectedMerchant) return;
     const amount = Number(paymentAmount);
-    if (!Number.isFinite(amount) || amount <= 0) { setError("أدخل مبلغ دفعة صحيحًا."); return; }
+    if (!Number.isFinite(amount) || amount <= 0) { setError(tr("invalidPayment")); return; }
     setBusy(true); setError("");
     try {
       await createPayment(workspaceId, selectedMerchant.id, user.uid, { date, currency: transactionCurrency, paymentMethod, amount, note });
@@ -243,7 +243,7 @@ export function App() {
   if (!user) return <main className="app-shell"><section className="welcome-card"><LanguagePicker language={language} setLanguage={setLanguage} /> <span className="eyebrow">{tr("merchantLedger")}</span><h1>{tr("signInTitle")}</h1><p>{tr("signInDescription")}</p>{error && <div className="error">{error}</div>}<button className="primary" onClick={handleGoogleSignIn}>{tr("signInGoogle")}</button></section></main>;
 
   if (selectedMerchant) return <main className="app-shell"><section className="dashboard">
-    <header className="topbar"><div><button className="ghost" onClick={() => setSelectedMerchant(null)}>{tr("backToMerchants")}</button><span className="eyebrow">{tr("merchantAccount")}</span><h1>{selectedMerchant.name}</h1></div><button className="ghost" onClick={() => signOutUser()}>{tr("signOut")}</button></header>
+    <header className="topbar"><div><button className="ghost" onClick={() => setSelectedMerchant(null)}>{tr("backToMerchants")}</button><span className="eyebrow">{tr("merchantAccount")}</span><h1>{selectedMerchant.name}</h1></div><div className="top-actions"><LanguagePicker language={language} setLanguage={setLanguage} /><button className="ghost" onClick={() => signOutUser()}>{tr("signOut")}</button></div></header>
     {error && <div className="error">{error}</div>}
     <div className="toolbar"><button className="ghost" onClick={() => selectedMerchant && exportMerchantStatement(selectedMerchant, transactions, {
       date: tr("date"), type: language === "ar" ? "النوع" : language === "tr" ? "Tür" : "Type",
@@ -299,7 +299,7 @@ export function App() {
   </section></main>;
 
   return <main className="app-shell"><section className="dashboard">
-    <header className="topbar"><div><span className="eyebrow">Merchant Ledger</span><h1>{tr("merchants")}</h1></div><button className="ghost" onClick={() => signOutUser()}>خروج</button></header>
+    <header className="topbar"><div><span className="eyebrow">{tr("merchantLedger")}</span><h1>{tr("merchants")}</h1></div><div className="top-actions"><LanguagePicker language={language} setLanguage={setLanguage} /><button className="ghost" onClick={() => signOutUser()}>{tr("signOut")}</button></div></header>
     {error && <div className="error">{error}</div>}
     <section className="add-card"><h2>{tr("addMerchant")}</h2><div className="form-row">
       <input value={merchantName} onChange={e => setMerchantName(e.target.value)} placeholder={tr("merchantName")} onKeyDown={e => e.key === "Enter" && addMerchant()} />

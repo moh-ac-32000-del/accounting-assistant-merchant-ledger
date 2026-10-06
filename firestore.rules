@@ -108,12 +108,17 @@ service cloud.firestore {
             );
           allow update: if isManager(workspaceId) &&
             resource.data.workspaceId == workspaceId &&
+            request.resource.data.workspaceId == workspaceId &&
+            request.resource.data.merchantId == merchantId &&
+            request.resource.data.type == resource.data.type &&
+            request.resource.data.createdBy == resource.data.createdBy &&
             (
               validPurchase(request.resource.data, workspaceId, merchantId) ||
               validPayment(request.resource.data, workspaceId, merchantId)
             );
-          allow delete: if isManager(workspaceId) &&
-            resource.data.workspaceId == workspaceId;
+          // Transactions are never physically deleted. Deletion is a soft-delete update
+          // so the financial history and audit trail remain recoverable.
+          allow delete: if false;
         }
       }
 

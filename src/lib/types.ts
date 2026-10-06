@@ -46,4 +46,22 @@ export interface Transaction {
   updatedAt: unknown;
   createdBy: string;
   updatedBy: string;
+  deleted?: boolean;
+  deletedAt?: unknown;
+  deletedBy?: string;
+}
+
+export type AuditAction = "created" | "updated" | "deleted" | "archived" | "restored";
+
+export interface AuditEvent {
+  id: string;
+  workspaceId: string;
+  merchantId?: string;
+  transactionId?: string;
+  actorId: string;
+  action: AuditAction;
+  summary: string;
+  before?: unknown;
+  after?: unknown;
+  createdAt: unknown;
 }

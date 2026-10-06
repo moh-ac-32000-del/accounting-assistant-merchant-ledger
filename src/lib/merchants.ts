@@ -13,10 +13,11 @@ export function subscribeToMerchants(
   callback: (merchants: Merchant[]) => void,
 ): Unsubscribe {
   if (!db) return () => undefined;
+  // Keep the query single-index friendly: filter in Firestore, then sort locally.
+  // This avoids requiring a composite index for status + createdAt.
   const q = query(
     merchantsCollection(workspaceId),
     where("status", "==", "active"),
-    orderBy("createdAt", "desc"),
   );
   return onSnapshot(q, (snapshot) => {
     const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as Merchant));

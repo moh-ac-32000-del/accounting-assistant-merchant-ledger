@@ -310,6 +310,7 @@ export function App() {
     <section className="add-card"><h2>{tr("materials")}</h2><div className="form-row">
       <input value={materialName} onChange={e => setMaterialName(e.target.value)} placeholder={tr("materialName")} />
       <input type="number" step="any" value={materialPrice} onChange={e => setMaterialPrice(e.target.value)} placeholder={tr("price")} />
+      <select value={materialCurrency} onChange={e => setMaterialCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select>
       <button className="primary" disabled={busy || !materialName.trim()} onClick={addMaterial}>{tr("addMaterial")}</button>
     </div></section>
     <div className="tabs"><button className={merchantTab === "active" ? "tab active-tab" : "tab"} onClick={() => setMerchantTab("active")}>{tr("active")} ({merchants.length})</button><button className={merchantTab === "archived" ? "tab active-tab" : "tab"} onClick={() => setMerchantTab("archived")}>{tr("archived")} ({archivedMerchants.length})</button></div>

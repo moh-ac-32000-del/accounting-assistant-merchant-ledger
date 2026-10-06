@@ -40,7 +40,9 @@ export function App() {
     try {
       await signInWithGoogle();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "تعذر تسجيل الدخول باستخدام Google.");
+      const authError = e as { code?: string; message?: string };
+      const code = authError.code ? ` [${authError.code}]` : "";
+      setError(`تعذر تسجيل الدخول باستخدام Google.${code} ${authError.message ?? ""}`.trim());
     }
   }
 

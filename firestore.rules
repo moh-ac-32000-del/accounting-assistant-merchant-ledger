@@ -37,16 +37,6 @@ service cloud.firestore {
       return isManager(workspaceId) || workerPermission(workspaceId, "editDeleteTransactions");
     }
 
-    function invitedMembership(data) {
-      return signedIn() &&
-        data.userId == request.auth.uid &&
-        data.role in ["admin", "member"] &&
-        data.invitationId is string &&
-        exists(/databases/$(database)/documents/invitations/$(data.invitationId)) &&
-        get(/databases/$(database)/documents/invitations/$(data.invitationId)).data.workspaceId == data.workspaceId &&
-        get(/databases/$(database)/documents/invitations/$(data.invitationId)).data.role == data.role;
-    }
-
     function isOwner(workspaceId) {
       return isMember(workspaceId) &&
         get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
@@ -111,6 +101,16 @@ service cloud.firestore {
         data.amount > 0;
     }
 
+    function validInvitation(data) {
+      return data.workspaceId is string &&
+        data.inviterId is string &&
+        data.role in ["admin", "member"] &&
+        data.expiresAt is timestamp &&
+        data.expiresAt > request.time &&
+        data.acceptedAt == null &&
+        data.cancelledAt == null;
+    }
+
     match /workspaces/{workspaceId} {
       allow read: if isMember(workspaceId);
       allow create: if signedIn() &&
@@ -144,8 +144,6 @@ service cloud.firestore {
               validPurchase(request.resource.data, workspaceId, merchantId) ||
               validPayment(request.resource.data, workspaceId, merchantId)
             );
-          // Transactions are never physically deleted. Deletion is a soft-delete update
-          // so the financial history and audit trail remain recoverable.
           allow delete: if false;
         }
       }
@@ -169,16 +167,64 @@ service cloud.firestore {
 
     match /invitations/{invitationId} {
       allow read: if signedIn();
-      allow create: if signedIn();
-      allow update: if signedIn();
+      allow create: if isManager(request.resource.data.workspaceId) &&
+        request.resource.data.inviterId == request.auth.uid &&
+        validInvitation(request.resource.data);
+      allow update: if signedIn() &&
+        (
+          (
+            resource.data.inviterId == request.auth.uid &&
+            isManager(resource.data.workspaceId) &&
+            request.resource.data.workspaceId == resource.data.workspaceId
+          ) ||
+          (
+            request.resource.data.workspaceId == resource.data.workspaceId &&
+            request.resource.data.role == resource.data.role &&
+            request.resource.data.acceptedAt == request.time &&
+            request.resource.data.cancelledAt == null &&
+            resource.data.acceptedAt == null &&
+            resource.data.cancelledAt == null &&
+            resource.data.expiresAt > request.time
+          )
+        );
       allow delete: if false;
     }
 
     match /memberships/{membershipId} {
-      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isOwner(resource.data.workspaceId) || isManager(resource.data.workspaceId));
-      allow create: if (signedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.role == "owner" && exists(/databases/$(database)/documents/workspaces/$(request.resource.data.workspaceId)) && get(/databases/$(database)/documents/workspaces/$(request.resource.data.workspaceId)).data.ownerId == request.auth.uid) || invitedMembership(request.resource.data);
-      allow update: if signedIn() && isOwner(resource.data.workspaceId) && request.resource.data.workspaceId == resource.data.workspaceId && request.resource.data.userId == resource.data.userId && request.resource.data.role in ["admin", "member"];
-      allow delete: if signedIn() && isOwner(resource.data.workspaceId) && resource.data.userId != request.auth.uid;
+      allow read: if signedIn() &&
+        (
+          resource.data.userId == request.auth.uid ||
+          isOwner(resource.data.workspaceId) ||
+          isManager(resource.data.workspaceId)
+        );
+      allow create: if
+        (
+          signedIn() &&
+          request.resource.data.userId == request.auth.uid &&
+          request.resource.data.role == "owner" &&
+          exists(/databases/$(database)/documents/workspaces/$(request.resource.data.workspaceId)) &&
+          get(/databases/$(database)/documents/workspaces/$(request.resource.data.workspaceId)).data.ownerId == request.auth.uid
+        ) ||
+        (
+          signedIn() &&
+          request.resource.data.userId == request.auth.uid &&
+          request.resource.data.role in ["admin", "member"] &&
+          request.resource.data.invitationId is string &&
+          exists(/databases/$(database)/documents/invitations/$(request.resource.data.invitationId)) &&
+          get(/databases/$(database)/documents/invitations/$(request.resource.data.invitationId)).data.workspaceId == request.resource.data.workspaceId &&
+          get(/databases/$(database)/documents/invitations/$(request.resource.data.invitationId)).data.role == request.resource.data.role &&
+          get(/databases/$(database)/documents/invitations/$(request.resource.data.invitationId)).data.acceptedAt == null &&
+          get(/databases/$(database)/documents/invitations/$(request.resource.data.invitationId)).data.cancelledAt == null &&
+          get(/databases/$(database)/documents/invitations/$(request.resource.data.invitationId)).data.expiresAt > request.time
+        );
+      allow update: if signedIn() &&
+        isOwner(resource.data.workspaceId) &&
+        request.resource.data.workspaceId == resource.data.workspaceId &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.role in ["admin", "member"];
+      allow delete: if signedIn() &&
+        isOwner(resource.data.workspaceId) &&
+        resource.data.userId != request.auth.uid;
     }
   }
 }

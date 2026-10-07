@@ -51,7 +51,8 @@ export async function acceptInvitation(token: string, userId: string) {
   if (!invitationSnap.exists()) throw new Error("Invitation not found.");
   const invitation = invitationSnap.data() as Invitation;
   if (invitation.acceptedAt || invitation.cancelledAt) throw new Error("Invitation is no longer available.");
-  if (invitation.expiresAt && new Date(String(invitation.expiresAt)).getTime() < Date.now()) throw new Error("Invitation expired.");
+  const expiry = invitation.expiresAt as { toDate?: () => Date } | undefined;
+  if (expiry?.toDate && expiry.toDate().getTime() < Date.now()) throw new Error("Invitation expired.");
 
   const membershipRef = doc(db, "memberships", invitation.workspaceId + "_" + userId);
   const batch = writeBatch(db);

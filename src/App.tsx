@@ -35,6 +35,7 @@ export function App() {
     return saved === "ar" || saved === "tr" || saved === "en" ? saved : "ar";
   });
   const tr = (key: TranslationKey) => translations[language][key];
+  const ui = language === "ar" ? { createSpace: "إنشاء مساحة", createSpaceTitle: "أنشئ مساحتك", createSpaceDescription: "أدخل اسم المساحة ثم ابدأ العمل.", spaceName: "اسم المساحة", settings: "الإعدادات", spaceSettings: "إعدادات المساحة", defaultCurrency: "العملة الافتراضية", paymentMethods: "طرق الدفع", newPaymentMethod: "طريقة دفع جديدة" } : language === "tr" ? { createSpace: "Alan oluştur", createSpaceTitle: "Alanınızı oluşturun", createSpaceDescription: "Alan adını girin ve çalışmaya başlayın.", spaceName: "Alan adı", settings: "Ayarlar", spaceSettings: "Alan ayarları", defaultCurrency: "Varsayılan para birimi", paymentMethods: "Ödeme yöntemleri", newPaymentMethod: "Yeni ödeme yöntemi" } : { createSpace: "Create Space", createSpaceTitle: "Create your Space", createSpaceDescription: "Enter a Space name to get started.", spaceName: "Space name", settings: "Settings", spaceSettings: "Space settings", defaultCurrency: "Default currency", paymentMethods: "Payment methods", newPaymentMethod: "New payment method" };
   const [materials, setMaterials] = useState<Material[]>([]);
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -326,7 +327,7 @@ export function App() {
   if (!firebaseConfigured) return <main className="app-shell"><section className="welcome-card"><span className="eyebrow">{tr("merchantLedger")}</span><h1>{tr("setupRequired")}</h1><p>{tr("setupDescription")}</p></section></main>;
   if (!user) return <main className="app-shell"><section className="welcome-card"><LanguagePicker language={language} setLanguage={setLanguage} /> <span className="eyebrow">{tr("merchantLedger")}</span><h1>{tr("signInTitle")}</h1><p>{tr("signInDescription")}</p>{error && <div className="error">{error}</div>}<button className="primary" onClick={handleGoogleSignIn}>{tr("signInGoogle")}</button></section></main>;
 
-  if (user && workspaces.length === 0 && !workspaceId) return <main className="app-shell"><section className="welcome-card"><LanguagePicker language={language} setLanguage={setLanguage} /><span className="eyebrow">{tr("createSpace")}</span><h1>{tr("createSpaceTitle")}</h1><p>{tr("createSpaceDescription")}</p><input value={workspaceName} onChange={e => setWorkspaceName(e.target.value)} placeholder={tr("spaceName")} /><button className="primary" disabled={busy || !workspaceName.trim()} onClick={createNewSpace}>{tr("createSpace")}</button></section></main>;
+  if (user && workspaces.length === 0 && !workspaceId) return <main className="app-shell"><section className="welcome-card"><LanguagePicker language={language} setLanguage={setLanguage} /><span className="eyebrow">{ui.createSpace}</span><h1>{ui.createSpaceTitle}</h1><p>{ui.createSpaceDescription}</p><input value={workspaceName} onChange={e => setWorkspaceName(e.target.value)} placeholder={ui.spaceName} /><button className="primary" disabled={busy || !workspaceName.trim()} onClick={createNewSpace}>{tr("createSpace")}</button></section></main>;
 
   if (selectedMerchant) return <main className="app-shell"><section className="dashboard">
     <header className="topbar"><div><button className="ghost" onClick={() => setSelectedMerchant(null)}>{tr("backToMerchants")}</button><span className="eyebrow">{tr("merchantAccount")}</span><h1>{selectedMerchant.name}</h1></div><div className="top-actions"><LanguagePicker language={language} setLanguage={setLanguage} /><button className="ghost" onClick={() => signOutUser()}>{tr("signOut")}</button></div></header>
@@ -385,7 +386,7 @@ export function App() {
   </section></main>;
 
   return <main className="app-shell"><section className="dashboard">
-    <header className="topbar"><div><span className="eyebrow">{tr("merchantLedger")}</span><h1>{tr("merchants")}</h1><select className="space-picker" value={workspaceId ?? ""} onChange={e => setWorkspaceId(e.target.value)}>{workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></div><div className="top-actions"><LanguagePicker language={language} setLanguage={setLanguage} /><button className="ghost" onClick={() => setSettingsOpen(true)}>{tr("settings")}</button><button className="ghost" onClick={() => signOutUser()}>{tr("signOut")}</button></div></header>
+    <header className="topbar"><div><span className="eyebrow">{tr("merchantLedger")}</span><h1>{tr("merchants")}</h1><select className="space-picker" value={workspaceId ?? ""} onChange={e => setWorkspaceId(e.target.value)}>{workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></div><div className="top-actions"><LanguagePicker language={language} setLanguage={setLanguage} /><button className="ghost" onClick={() => setSettingsOpen(true)}>{ui.settings}</button><button className="ghost" onClick={() => signOutUser()}>{tr("signOut")}</button></div></header>
     {error && <div className="error">{error}</div>}
     <section className="add-card"><h2>{tr("addMerchant")}</h2><div className="form-row">
       <input value={merchantName} onChange={e => setMerchantName(e.target.value)} placeholder={tr("merchantName")} onKeyDown={e => e.key === "Enter" && addMerchant()} />
@@ -399,12 +400,12 @@ export function App() {
       <button className="primary" disabled={busy || !materialName.trim()} onClick={addMaterial}>{tr("addMaterial")}</button>
     </div></section>}
     {settingsOpen && <section className="settings-panel">
-      <div className="section-head"><h2>{tr("spaceSettings")}</h2><button className="ghost" onClick={() => setSettingsOpen(false)}>{tr("close")}</button></div>
+      <div className="section-head"><h2>{ui.spaceSettings}</h2><button className="ghost" onClick={() => setSettingsOpen(false)}>{tr("close")}</button></div>
       <label className="settings-field"><span>{tr("spaceName")}</span><input value={workspaceName} onChange={e => setWorkspaceName(e.target.value)} /></label>
-      <label className="settings-field"><span>{tr("defaultCurrency")}</span><select value={workspaceDefaultCurrency} onChange={e => setWorkspaceDefaultCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select></label>
-      <h3>{tr("paymentMethods")}</h3>
+      <label className="settings-field"><span>{ui.defaultCurrency}</span><select value={workspaceDefaultCurrency} onChange={e => setWorkspaceDefaultCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select></label>
+      <h3>{ui.paymentMethods}</h3>
       <div className="payment-method-list">{paymentMethods.map(pm => <label key={pm.id}><input type="checkbox" checked={pm.active} onChange={() => togglePaymentMethod(pm.id)} /> {pm.name}</label>)}</div>
-      <div className="form-row"><input value={newPaymentMethod} onChange={e => setNewPaymentMethod(e.target.value)} placeholder={tr("newPaymentMethod")} /><button className="primary" onClick={addPaymentMethodSetting}>{tr("add")}</button></div>
+      <div className="form-row"><input value={newPaymentMethod} onChange={e => setNewPaymentMethod(e.target.value)} placeholder={ui.newPaymentMethod} /><button className="primary" onClick={addPaymentMethodSetting}>{tr("add")}</button></div>
       <h3>{tr("materials")}</h3>
       <div className="form-row"><input value={materialName} onChange={e => setMaterialName(e.target.value)} placeholder={tr("materialName")} /><input type="number" step="any" value={materialPrice} onChange={e => setMaterialPrice(e.target.value)} placeholder={tr("price")} /><select value={materialCurrency} onChange={e => setMaterialCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select><button className="primary" disabled={busy || !materialName.trim()} onClick={addMaterial}>{tr("addMaterial")}</button></div>
       <div className="settings-materials">{materials.map(m => <div key={m.id}>{m.name} · {m.defaultPrice} {m.currency}</div>)}</div>

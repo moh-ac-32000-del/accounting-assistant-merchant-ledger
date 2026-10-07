@@ -11,6 +11,13 @@ export interface SpaceMember {
   photoURL?: string;
   email?: string;
   createdAt?: unknown;
+  permissions?: {
+    editDeleteTransactions: boolean;
+    manageMaterials: boolean;
+    manageReferencePrices: boolean;
+    managePaymentMethods: boolean;
+    manageMerchants: boolean;
+  };
 }
 
 export async function listMembers(workspaceId: string) {
@@ -27,4 +34,9 @@ export async function changeMemberRole(membershipId: string, role: "admin" | "me
 export async function removeMember(membershipId: string) {
   if (!db) throw new Error("Firebase is not configured.");
   await deleteDoc(doc(db, "memberships", membershipId));
+}
+
+export async function updateMemberPermissions(membershipId: string, permissions: NonNullable<SpaceMember["permissions"]>) {
+  if (!db) throw new Error("Firebase is not configured.");
+  await updateDoc(doc(db, "memberships", membershipId), { permissions });
 }

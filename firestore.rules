@@ -37,6 +37,16 @@ service cloud.firestore {
       return isManager(workspaceId) || workerPermission(workspaceId, "editDeleteTransactions");
     }
 
+    function invitedMembership(data) {
+      return signedIn() &&
+        data.userId == request.auth.uid &&
+        data.role in ["admin", "member"] &&
+        data.invitationId is string &&
+        exists(/databases/$(database)/documents/invitations/$(data.invitationId)) &&
+        get(/databases/$(database)/documents/invitations/$(data.invitationId)).data.workspaceId == data.workspaceId &&
+        get(/databases/$(database)/documents/invitations/$(data.invitationId)).data.role == data.role;
+    }
+
     function isOwner(workspaceId) {
       return isMember(workspaceId) &&
         get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
@@ -166,12 +176,7 @@ service cloud.firestore {
 
     match /memberships/{membershipId} {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
-      allow create: if signedIn() &&
-        request.resource.data.userId == request.auth.uid &&
-        (
-          request.resource.data.role == "owner" ||
-          request.resource.data.role in ["admin", "member"]
-        );
+      allow create: if (signedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.role == "owner" && exists(/databases/$(database)/documents/workspaces/$(request.resource.data.workspaceId)) && get(/databases/$(database)/documents/workspaces/$(request.resource.data.workspaceId)).data.ownerId == request.auth.uid) || invitedMembership(request.resource.data);
       allow update, delete: if false;
     }
   }

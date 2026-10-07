@@ -369,7 +369,7 @@ export function App() {
       summary: tr("statement"), balance: tr("balance"), purchases: tr("purchases"), payments: tr("payments"),
     })}>{tr("exportStatement")}</button></div>
     <div className="floating-balance"><section className="balance-grid">
-      {(["TRY","USD"] as Currency[]).map(c => <article className="balance-card" key={c}><span>{c}</span><strong>{money(balances[c].purchases - balances[c].payments, c)}</strong><small>{balances[c].purchases >= balances[c].payments ? tr("owed") : tr("credit")}</small></article>)}
+      {(["TRY","USD"] as Currency[]).map(c => { const diff = balances[c].purchases - balances[c].payments; return <article className={"balance-card " + (diff < 0 ? "credit-balance" : diff > 0 ? "owed-balance" : "zero-balance")} key={c}><span>{c}</span><strong>{money(diff, c)}</strong><small>{diff > 0 ? tr("owed") : diff < 0 ? tr("credit") : "0"}</small></article>; })}
     </section></div>
     <section className="add-card"><h2>{tr("addPurchase")}</h2><div className="form-grid">
       <input list="materials" value={materialName} onChange={e => selectMaterial(e.target.value)} placeholder={tr("material")} />

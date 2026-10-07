@@ -1,5 +1,5 @@
 import {
-  addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc,
+  addDoc, collection, doc, getDoc, onSnapshot, orderBy, query, serverTimestamp, updateDoc,
   writeBatch, type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -98,6 +98,23 @@ export async function createPurchase(
   const batch = writeBatch(db);
   const ref = doc(transactionsCollection(workspaceId, merchantId));
   const auditRef = doc(auditCollection(workspaceId));
+  const merchantRef = doc(db, "workspaces", workspaceId, "merchants", merchantId);
+  const merchantSnap = await getDoc(merchantRef);
+  if (!merchantSnap.exists()) throw new Error("التاجر غير موجود.");
+  const merchantData = merchantSnap.data() as { status?: string };
+  if (merchantData.status === "archived") {
+    batch.update(merchantRef, { status: "active", archivedAt: null, updatedAt: serverTimestamp() });
+    batch.set(doc(auditCollection(workspaceId)), {
+      workspaceId,
+      merchantId,
+      actorId: userId,
+      action: "restored",
+      summary: "إعادة تفعيل التاجر تلقائياً بعد تسجيل عملية جديدة",
+      before: { status: "archived" },
+      after: { status: "active", reason: "new_transaction" },
+      createdAt: serverTimestamp(),
+    });
+  }
 
   batch.set(ref, {
     workspaceId,
@@ -147,6 +164,23 @@ export async function createPayment(
   const batch = writeBatch(db);
   const ref = doc(transactionsCollection(workspaceId, merchantId));
   const auditRef = doc(auditCollection(workspaceId));
+  const merchantRef = doc(db, "workspaces", workspaceId, "merchants", merchantId);
+  const merchantSnap = await getDoc(merchantRef);
+  if (!merchantSnap.exists()) throw new Error("التاجر غير موجود.");
+  const merchantData = merchantSnap.data() as { status?: string };
+  if (merchantData.status === "archived") {
+    batch.update(merchantRef, { status: "active", archivedAt: null, updatedAt: serverTimestamp() });
+    batch.set(doc(auditCollection(workspaceId)), {
+      workspaceId,
+      merchantId,
+      actorId: userId,
+      action: "restored",
+      summary: "إعادة تفعيل التاجر تلقائياً بعد تسجيل عملية جديدة",
+      before: { status: "archived" },
+      after: { status: "active", reason: "new_transaction" },
+      createdAt: serverTimestamp(),
+    });
+  }
 
   batch.set(ref, {
     workspaceId,

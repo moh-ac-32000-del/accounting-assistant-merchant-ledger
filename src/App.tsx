@@ -92,7 +92,7 @@ export function App() {
     const token = new URLSearchParams(window.location.search).get("invite");
     if (!token) return;
     setBusy(true);
-    acceptInvitation(token, user.uid)
+    acceptInvitation(token, user.uid, { displayName: user.displayName, photoURL: user.photoURL, email: user.email })
       .then(async () => {
         window.history.replaceState({}, "", window.location.pathname);
         const spaces = await listUserWorkspaces(user.uid);

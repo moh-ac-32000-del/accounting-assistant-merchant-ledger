@@ -59,6 +59,7 @@ export async function acceptInvitation(token: string, userId: string) {
     workspaceId: invitation.workspaceId,
     userId,
     role: invitation.role,
+    invitationId: token,
     createdAt: serverTimestamp(),
   });
   batch.update(invitationRef, { acceptedAt: serverTimestamp(), acceptedBy: userId });

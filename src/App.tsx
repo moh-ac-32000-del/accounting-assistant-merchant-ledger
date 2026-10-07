@@ -24,6 +24,7 @@ export function App() {
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceDefaultCurrency, setWorkspaceDefaultCurrency] = useState<Currency>("TRY");
   const [paymentMethods, setPaymentMethods] = useState<Array<{ id: string; name: string; active: boolean }>>([]);
+  const [workerPermissions, setWorkerPermissions] = useState({ editDeleteTransactions: true, manageMaterials: true, manageReferencePrices: true, managePaymentMethods: true, manageMerchants: true });
   const [newPaymentMethod, setNewPaymentMethod] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [inviteLink, setInviteLink] = useState("");
@@ -123,6 +124,7 @@ export function App() {
         setWorkspaceName(selected.name);
         setWorkspaceDefaultCurrency((selected as any).defaultCurrency === "USD" ? "USD" : "TRY");
         setPaymentMethods((selected as any).paymentMethods ?? [{ id: "cash", name: "Cash", active: true }]);
+        setWorkerPermissions((selected as any).workerPermissions ?? { editDeleteTransactions: true, manageMaterials: true, manageReferencePrices: true, managePaymentMethods: true, manageMerchants: true });
       })
       .catch(() => { if (!cancelled) setError(tr("merchantError")); });
     return () => { cancelled = true; };
@@ -234,6 +236,7 @@ export function App() {
         name: workspaceName.trim(),
         defaultCurrency: workspaceDefaultCurrency,
         paymentMethods,
+        workerPermissions,
       });
       setWorkspaces(prev => prev.map(w => w.id === workspaceId ? { ...w, name: workspaceName.trim() } : w));
       setSettingsOpen(false);
@@ -478,7 +481,7 @@ export function App() {
       <h3>{language === "ar" ? "دعوة عضو" : language === "tr" ? "Üye davet et" : "Invite member"}</h3>
       <div className="form-row"><select value={inviteRole} onChange={e => setInviteRole(e.target.value as "admin" | "member")}><option value="admin">{language === "ar" ? "مدير" : language === "tr" ? "Yönetici" : "Manager"}</option><option value="member">{language === "ar" ? "عامل" : language === "tr" ? "Çalışan" : "Worker"}</option></select><button className="primary" disabled={busy} onClick={makeInvitation}>{language === "ar" ? "إنشاء دعوة" : language === "tr" ? "Davet oluştur" : "Create invitation"}</button></div>
       {inviteLink && <div className="invite-box"><input readOnly value={inviteLink} /><button className="ghost" onClick={() => navigator.clipboard.writeText(inviteLink)}>{language === "ar" ? "نسخ" : language === "tr" ? "Kopyala" : "Copy"}</button><button className="ghost" onClick={() => window.open("https://wa.me/?text=" + encodeURIComponent(inviteLink), "_blank")}>WhatsApp</button></div>}
-      <div className="payment-method-list">{paymentMethods.map(pm => <label key={pm.id}><input type="checkbox" checked={pm.active} onChange={() => togglePaymentMethod(pm.id)} /> {pm.name}</label>)}</div>
+      <div className="payment-method-list">{paymentMethods.map(pm => <label key={pm.id}><input type="checkbox" checked={pm.active} onChange={() => togglePaymentMethod(pm.id)} /> {pm.name}</label>)}</div>\n      <h3>{language === "ar" ? "صلاحيات العامل" : language === "tr" ? "Çalışan izinleri" : "Worker permissions"}</h3>\n      <div className="payment-method-list">{Object.entries(workerPermissions).map(([key, value]) => <label key={key}><input type="checkbox" checked={value} onChange={() => setWorkerPermissions(prev => ({ ...prev, [key]: !prev[key as keyof typeof prev] }))} /> {key === "editDeleteTransactions" ? tr("edit") + " / " + tr("delete") : key === "manageMaterials" ? tr("materials") : key === "manageReferencePrices" ? tr("price") : key === "managePaymentMethods" ? ui.paymentMethods : tr("merchants")}</label>)}</div>
       <div className="form-row"><input value={newPaymentMethod} onChange={e => setNewPaymentMethod(e.target.value)} placeholder={ui.newPaymentMethod} /><button className="primary" onClick={addPaymentMethodSetting}>{tr("add")}</button></div>
       <h3>{tr("materials")}</h3>
       <div className="form-row"><input value={materialName} onChange={e => setMaterialName(e.target.value)} placeholder={tr("materialName")} /><input type="number" step="any" value={materialPrice} onChange={e => setMaterialPrice(e.target.value)} placeholder={tr("price")} /><select value={materialCurrency} onChange={e => setMaterialCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select><button className="primary" disabled={busy || !materialName.trim()} onClick={addMaterial}>{tr("addMaterial")}</button></div>

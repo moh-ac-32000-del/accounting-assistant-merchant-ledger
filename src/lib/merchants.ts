@@ -122,3 +122,29 @@ export async function restoreMerchant(workspaceId: string, merchantId: string, u
 
   await batch.commit();
 }
+
+import { getDocs } from "firebase/firestore";
+
+export async function autoArchiveInactiveMerchants(workspaceId: string, merchants: Merchant[], inactiveDays: number) {
+  if (!db || inactiveDays <= 0) return;
+  const cutoff = Date.now() - inactiveDays * 24 * 60 * 60 * 1000;
+  for (const merchant of merchants) {
+    if (merchant.status !== "active") continue;
+    const snap = await getDocs(collection(db, "workspaces", workspaceId, "merchants", merchant.id, "transactions"));
+    let tryBalance = 0;
+    let usdBalance = 0;
+    let latest = merchant.createdAt;
+    for (const d of snap.docs) {
+      const t = d.data() as { type?: string; currency?: string; total?: number; amount?: number; date?: string; createdAt?: unknown; deleted?: boolean };
+      if (t.deleted) continue;
+      const value = Number(t.type === "purchase" ? t.total ?? 0 : t.amount ?? 0);
+      if (t.currency === "TRY") tryBalance += t.type === "purchase" ? value : -value;
+      if (t.currency === "USD") usdBalance += t.type === "purchase" ? value : -value;
+      if (String(t.date ?? "") > String(latest ?? "")) latest = t.date;
+    }
+    const latestMs = typeof latest === "string" && /^\d{4}-\d{2}-\d{2}$/.test(latest) ? new Date(latest + "T23:59:59").getTime() : 0;
+    if (tryBalance === 0 && usdBalance === 0 && latestMs > 0 && latestMs < cutoff) {
+      await archiveMerchant(workspaceId, merchant.id, "auto-archive");
+    }
+  }
+}

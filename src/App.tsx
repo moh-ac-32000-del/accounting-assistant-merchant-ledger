@@ -55,6 +55,8 @@ export function App() {
   const [editingMaterialPrice, setEditingMaterialPrice] = useState("");
   const [materialCurrency, setMaterialCurrency] = useState<Currency>("TRY");
   const [date, setDate] = useState(today());
+  const [statementFrom, setStatementFrom] = useState("");
+  const [statementTo, setStatementTo] = useState("");
   const [quantity, setQuantity] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -413,7 +415,7 @@ export function App() {
   if (selectedMerchant) return <main className="app-shell"><section className="dashboard">
     <header className="topbar"><div><button className="ghost" onClick={() => setSelectedMerchant(null)}>{tr("backToMerchants")}</button><span className="eyebrow">{tr("merchantAccount")}</span><h1>{selectedMerchant.name}</h1></div><div className="top-actions"><LanguagePicker language={language} setLanguage={setLanguage} /><button className="ghost" onClick={() => signOutUser()}>{tr("signOut")}</button></div></header>
     {error && <div className="error">{error}</div>}
-    <div className="toolbar"><button className="ghost" onClick={() => selectedMerchant && exportMerchantStatement(selectedMerchant, transactions, {
+    <div className="toolbar"><input type="date" value={statementFrom} onChange={e => setStatementFrom(e.target.value)} /><input type="date" value={statementTo} onChange={e => setStatementTo(e.target.value)} /><button className="ghost" onClick={() => selectedMerchant && exportMerchantStatement(selectedMerchant, transactions.filter(t => (!statementFrom || t.date >= statementFrom) && (!statementTo || t.date <= statementTo)), {
       date: tr("date"), type: language === "ar" ? "النوع" : language === "tr" ? "Tür" : "Type",
       material: tr("material"), quantity: tr("quantity"), unitPrice: tr("unitPrice"), amount: tr("amount"),
       currency: tr("currency"), note: tr("note"), purchase: tr("purchase"), payment: tr("payment"),

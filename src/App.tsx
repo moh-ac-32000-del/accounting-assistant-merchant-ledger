@@ -129,9 +129,9 @@ export function App() {
 
   useEffect(() => {
     if (!selectedMerchant) return;
-    setTransactionCurrency(selectedMerchant.defaultCurrency);
-    setPaymentMethod(tr("cash"));
-  }, [selectedMerchant?.id, language]);
+    setTransactionCurrency(workspaceDefaultCurrency);
+    setPaymentMethod((paymentMethods.find(x => x.active)?.name) ?? tr("cash"));
+  }, [selectedMerchant?.id, language, workspaceDefaultCurrency]);
 
   const filteredMaterials = useMemo(() => {
     const q = materialName.trim().toLowerCase();
@@ -353,7 +353,7 @@ export function App() {
     </div></section>
     <section className="add-card"><h2>{tr("addPayment")}</h2><div className="form-grid">
       <input type="number" step="any" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder={tr("amount")} />
-      <input value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} placeholder={tr("paymentMethod")} />
+      <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>{paymentMethods.filter(x => x.active).map(x => <option key={x.id} value={x.name}>{x.name}</option>)}</select>
       <input type="date" value={date} onChange={e => setDate(e.target.value)} />
       <select value={transactionCurrency} onChange={e => setTransactionCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select>
       <input value={note} onChange={e => setNote(e.target.value)} placeholder={tr("note")} />

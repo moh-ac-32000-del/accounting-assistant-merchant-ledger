@@ -22,7 +22,21 @@ service cloud.firestore {
     function workerPermission(workspaceId, permission) {
       return isMember(workspaceId) &&
         membership(workspaceId).data.role == "member" &&
-        get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.workerPermissions[permission] == true;
+        (
+          !("permissions" in membership(workspaceId).data) ||
+          !(permission in membership(workspaceId).data.permissions) ?
+          get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.workerPermissions[permission] == true :
+          membership(workspaceId).data.permissions[permission] == true
+        );
+    }
+
+    function validWorkerPermissions(data) {
+      return data is map &&
+        data.editDeleteTransactions is bool &&
+        data.manageMaterials is bool &&
+        data.manageReferencePrices is bool &&
+        data.managePaymentMethods is bool &&
+        data.manageMerchants is bool;
     }
 
     function canManageMerchants(workspaceId) {
@@ -221,7 +235,8 @@ service cloud.firestore {
         isOwner(resource.data.workspaceId) &&
         request.resource.data.workspaceId == resource.data.workspaceId &&
         request.resource.data.userId == resource.data.userId &&
-        request.resource.data.role in ["admin", "member"];
+        request.resource.data.role in ["admin", "member"] &&
+        (!("permissions" in request.resource.data) || validWorkerPermissions(request.resource.data.permissions));
       allow delete: if signedIn() &&
         isOwner(resource.data.workspaceId) &&
         resource.data.userId != request.auth.uid;

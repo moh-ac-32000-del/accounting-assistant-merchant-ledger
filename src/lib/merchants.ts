@@ -125,7 +125,7 @@ export async function restoreMerchant(workspaceId: string, merchantId: string, u
 
 import { getDocs } from "firebase/firestore";
 
-export async function autoArchiveInactiveMerchants(workspaceId: string, merchants: Merchant[], inactiveDays: number) {
+export async function autoArchiveInactiveMerchants(workspaceId: string, merchants: Merchant[], inactiveDays: number, actorId: string) {
   if (!db || inactiveDays <= 0) return;
   const cutoff = Date.now() - inactiveDays * 24 * 60 * 60 * 1000;
   for (const merchant of merchants) {
@@ -144,7 +144,7 @@ export async function autoArchiveInactiveMerchants(workspaceId: string, merchant
     }
     const latestMs = typeof latest === "string" && /^\d{4}-\d{2}-\d{2}$/.test(latest) ? new Date(latest + "T23:59:59").getTime() : 0;
     if (tryBalance === 0 && usdBalance === 0 && latestMs > 0 && latestMs < cutoff) {
-      await archiveMerchant(workspaceId, merchant.id, "auto-archive");
+      await archiveMerchant(workspaceId, merchant.id, actorId);
     }
   }
 }

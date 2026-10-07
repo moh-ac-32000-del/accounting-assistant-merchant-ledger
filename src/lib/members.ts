@@ -7,6 +7,9 @@ export interface SpaceMember {
   workspaceId: string;
   userId: string;
   role: WorkspaceRole;
+  displayName?: string;
+  photoURL?: string;
+  email?: string;
   createdAt?: unknown;
 }
 

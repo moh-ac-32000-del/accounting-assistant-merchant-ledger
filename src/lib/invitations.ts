@@ -44,7 +44,7 @@ export async function getInvitation(token: string) {
   return { id: snap.id, ...snap.data() } as Invitation;
 }
 
-export async function acceptInvitation(token: string, userId: string) {
+export async function acceptInvitation(token: string, userId: string, profile?: { displayName?: string | null; photoURL?: string | null; email?: string | null }) {
   if (!db) throw new Error("Firebase is not configured.");
   const invitationRef = doc(db, "invitations", token);
   const invitationSnap = await getDoc(invitationRef);
@@ -61,6 +61,9 @@ export async function acceptInvitation(token: string, userId: string) {
     userId,
     role: invitation.role,
     invitationId: token,
+    displayName: profile?.displayName ?? "",
+    photoURL: profile?.photoURL ?? "",
+    email: profile?.email ?? "",
     createdAt: serverTimestamp(),
   });
   batch.update(invitationRef, { acceptedAt: serverTimestamp(), acceptedBy: userId });

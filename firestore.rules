@@ -157,6 +157,13 @@ service cloud.firestore {
       }
     }
 
+    match /invitations/{invitationId} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update: if signedIn();
+      allow delete: if false;
+    }
+
     match /memberships/{membershipId} {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
       allow create: if signedIn() &&

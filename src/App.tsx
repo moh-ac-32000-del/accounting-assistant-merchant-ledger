@@ -3,7 +3,7 @@ import type { User } from "firebase/auth";
 import { signInWithGoogle, signOutUser, subscribeToAuth } from "./lib/auth";
 import { firebaseConfigured } from "./lib/firebase";
 import { archiveMerchant, createMerchant, restoreMerchant, subscribeToArchivedMerchants, subscribeToMerchants } from "./lib/merchants";
-import { getOrCreateWorkspace, listUserWorkspaces, createWorkspace, updateWorkspaceSettings, type WorkspaceSummary, type WorkspaceRole } from "./lib/workspaces";
+import { getOrCreateWorkspace, listUserWorkspaces, createWorkspace, updateWorkspaceSettings, setDeputy, type WorkspaceSummary, type WorkspaceRole } from "./lib/workspaces";
 import { createPayment, createPurchase, deleteTransaction, subscribeToAuditEvents, subscribeToTransactions, updateTransaction } from "./lib/transactions";
 import { createMaterial, subscribeToMaterials, updateMaterial } from "./lib/materials";
 import type { AuditEvent, Currency, Material, Merchant, Transaction } from "./lib/types";
@@ -29,6 +29,7 @@ export function App() {
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [inviteLink, setInviteLink] = useState("");
   const [members, setMembers] = useState<SpaceMember[]>([]);
+  const [deputyId, setDeputyId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [archivedMerchants, setArchivedMerchants] = useState<Merchant[]>([]);
@@ -125,6 +126,7 @@ export function App() {
         setWorkspaceDefaultCurrency((selected as any).defaultCurrency === "USD" ? "USD" : "TRY");
         setPaymentMethods((selected as any).paymentMethods ?? [{ id: "cash", name: "Cash", active: true }]);
         setWorkerPermissions((selected as any).workerPermissions ?? { editDeleteTransactions: true, manageMaterials: true, manageReferencePrices: true, managePaymentMethods: true, manageMerchants: true });
+        setDeputyId((selected as any).deputyId ?? null);
       })
       .catch(() => { if (!cancelled) setError(tr("merchantError")); });
     return () => { cancelled = true; };
@@ -195,7 +197,7 @@ export function App() {
     if (material) { setUnitPrice(String(material.defaultPrice)); setTransactionCurrency(material.currency); }
   }
 
-  async function changeRole(member: SpaceMember) {
+  async function toggleDeputy(member: SpaceMember) {\n    if (!workspaceId || member.role === "owner") return;\n    setBusy(true);\n    try {\n      const next = deputyId === member.userId ? null : member.userId;\n      await setDeputy(workspaceId, next);\n      setDeputyId(next);\n    } catch { setError(tr("merchantError")); }\n    finally { setBusy(false); }\n  }\n\n  async function changeRole(member: SpaceMember) {
     if (!workspaceId) return;
     const role = member.role === "admin" ? "member" : "admin";
     setBusy(true);
@@ -477,7 +479,7 @@ export function App() {
       <label className="settings-field"><span>{ui.defaultCurrency}</span><select value={workspaceDefaultCurrency} onChange={e => setWorkspaceDefaultCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select></label>
       <h3>{ui.paymentMethods}</h3>
       <h3>{language === "ar" ? "الأعضاء" : language === "tr" ? "Üyeler" : "Members"}</h3>
-      <div className="settings-materials">{members.map(member => <div key={member.id}><strong>{member.displayName || member.email || member.userId}</strong> · {member.role === "owner" ? "Owner" : member.role === "admin" ? (language === "ar" ? "مدير" : language === "tr" ? "Yönetici" : "Manager") : (language === "ar" ? "عامل" : language === "tr" ? "Çalışan" : "Worker")} {member.role !== "owner" && <><button className="ghost small" disabled={busy} onClick={() => changeRole(member)}>{member.role === "admin" ? (language === "ar" ? "عامل" : language === "tr" ? "Çalışan" : "Worker") : (language === "ar" ? "مدير" : language === "tr" ? "Yönetici" : "Manager")}</button><button className="ghost danger small" disabled={busy} onClick={() => kickMember(member)}>{tr("delete")}</button></>}</div>)}</div>
+      <div className="settings-materials">{members.map(member => <div key={member.id}><strong>{member.displayName || member.email || member.userId}</strong> · {member.role === "owner" ? "Owner" : member.role === "admin" ? (language === "ar" ? "مدير" : language === "tr" ? "Yönetici" : "Manager") : (language === "ar" ? "عامل" : language === "tr" ? "Çalışan" : "Worker")} {member.role !== "owner" && <><button className="ghost small" disabled={busy} onClick={() => changeRole(member)}>{member.role === "admin" ? (language === "ar" ? "عامل" : language === "tr" ? "Çalışan" : "Worker") : (language === "ar" ? "مدير" : language === "tr" ? "Yönetici" : "Manager")}</button><button className="ghost small" disabled={busy || member.role === "member" ? false : false} onClick={() => toggleDeputy(member)}>{deputyId === member.userId ? (language === "ar" ? "إزالة النائب" : language === "tr" ? "Vekili kaldır" : "Remove deputy") : (language === "ar" ? "نائب" : language === "tr" ? "Vekil" : "Deputy")}</button><button className="ghost danger small" disabled={busy} onClick={() => kickMember(member)}>{tr("delete")}</button></>}</div>)}</div>
       <h3>{language === "ar" ? "دعوة عضو" : language === "tr" ? "Üye davet et" : "Invite member"}</h3>
       <div className="form-row"><select value={inviteRole} onChange={e => setInviteRole(e.target.value as "admin" | "member")}><option value="admin">{language === "ar" ? "مدير" : language === "tr" ? "Yönetici" : "Manager"}</option><option value="member">{language === "ar" ? "عامل" : language === "tr" ? "Çalışan" : "Worker"}</option></select><button className="primary" disabled={busy} onClick={makeInvitation}>{language === "ar" ? "إنشاء دعوة" : language === "tr" ? "Davet oluştur" : "Create invitation"}</button></div>
       {inviteLink && <div className="invite-box"><input readOnly value={inviteLink} /><button className="ghost" onClick={() => navigator.clipboard.writeText(inviteLink)}>{language === "ar" ? "نسخ" : language === "tr" ? "Kopyala" : "Copy"}</button><button className="ghost" onClick={() => window.open("https://wa.me/?text=" + encodeURIComponent(inviteLink), "_blank")}>WhatsApp</button></div>}

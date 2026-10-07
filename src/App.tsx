@@ -327,7 +327,7 @@ export function App() {
   if (!firebaseConfigured) return <main className="app-shell"><section className="welcome-card"><span className="eyebrow">{tr("merchantLedger")}</span><h1>{tr("setupRequired")}</h1><p>{tr("setupDescription")}</p></section></main>;
   if (!user) return <main className="app-shell"><section className="welcome-card"><LanguagePicker language={language} setLanguage={setLanguage} /> <span className="eyebrow">{tr("merchantLedger")}</span><h1>{tr("signInTitle")}</h1><p>{tr("signInDescription")}</p>{error && <div className="error">{error}</div>}<button className="primary" onClick={handleGoogleSignIn}>{tr("signInGoogle")}</button></section></main>;
 
-  if (user && workspaces.length === 0 && !workspaceId) return <main className="app-shell"><section className="welcome-card"><LanguagePicker language={language} setLanguage={setLanguage} /><span className="eyebrow">{ui.createSpace}</span><h1>{ui.createSpaceTitle}</h1><p>{ui.createSpaceDescription}</p><input value={workspaceName} onChange={e => setWorkspaceName(e.target.value)} placeholder={ui.spaceName} /><button className="primary" disabled={busy || !workspaceName.trim()} onClick={createNewSpace}>{tr("createSpace")}</button></section></main>;
+  if (user && workspaces.length === 0 && !workspaceId) return <main className="app-shell"><section className="welcome-card"><LanguagePicker language={language} setLanguage={setLanguage} /><span className="eyebrow">{ui.createSpace}</span><h1>{ui.createSpaceTitle}</h1><p>{ui.createSpaceDescription}</p><input value={workspaceName} onChange={e => setWorkspaceName(e.target.value)} placeholder={ui.spaceName} /><button className="primary" disabled={busy || !workspaceName.trim()} onClick={createNewSpace}>{ui.createSpace}</button></section></main>;
 
   if (selectedMerchant) return <main className="app-shell"><section className="dashboard">
     <header className="topbar"><div><button className="ghost" onClick={() => setSelectedMerchant(null)}>{tr("backToMerchants")}</button><span className="eyebrow">{tr("merchantAccount")}</span><h1>{selectedMerchant.name}</h1></div><div className="top-actions"><LanguagePicker language={language} setLanguage={setLanguage} /><button className="ghost" onClick={() => signOutUser()}>{tr("signOut")}</button></div></header>
@@ -401,7 +401,7 @@ export function App() {
     </div></section>}
     {settingsOpen && <section className="settings-panel">
       <div className="section-head"><h2>{ui.spaceSettings}</h2><button className="ghost" onClick={() => setSettingsOpen(false)}>{tr("close")}</button></div>
-      <label className="settings-field"><span>{tr("spaceName")}</span><input value={workspaceName} onChange={e => setWorkspaceName(e.target.value)} /></label>
+      <label className="settings-field"><span>{ui.spaceName}</span><input value={workspaceName} onChange={e => setWorkspaceName(e.target.value)} /></label>
       <label className="settings-field"><span>{ui.defaultCurrency}</span><select value={workspaceDefaultCurrency} onChange={e => setWorkspaceDefaultCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select></label>
       <h3>{ui.paymentMethods}</h3>
       <div className="payment-method-list">{paymentMethods.map(pm => <label key={pm.id}><input type="checkbox" checked={pm.active} onChange={() => togglePaymentMethod(pm.id)} /> {pm.name}</label>)}</div>

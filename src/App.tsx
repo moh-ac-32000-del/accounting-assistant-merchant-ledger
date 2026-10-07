@@ -10,6 +10,7 @@ import type { AuditEvent, Currency, Material, Merchant, Transaction } from "./li
 import { LANGUAGE_STORAGE_KEY, translations, type Language, type TranslationKey } from "./lib/i18n";
 import { exportMerchantStatement } from "./lib/export";
 import { acceptInvitation, createInvitation } from "./lib/invitations";
+import { changeMemberRole, listMembers, removeMember, type SpaceMember } from "./lib/members";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const money = (value: number, currency: Currency) =>
@@ -26,6 +27,7 @@ export function App() {
   const [newPaymentMethod, setNewPaymentMethod] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [inviteLink, setInviteLink] = useState("");
+  const [members, setMembers] = useState<SpaceMember[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [archivedMerchants, setArchivedMerchants] = useState<Merchant[]>([]);
@@ -135,6 +137,7 @@ export function App() {
       setWorkspaceDefaultCurrency((current as any).defaultCurrency === "USD" ? "USD" : "TRY");
       setPaymentMethods((current as any).paymentMethods ?? [{ id: "cash", name: "Cash", active: true }]);
     }
+    listMembers(workspaceId).then(setMembers).catch(() => undefined);
     const unsubMerchants = subscribeToMerchants(workspaceId, setMerchants);
     const unsubArchived = subscribeToArchivedMerchants(workspaceId, setArchivedMerchants);
     const unsubMaterials = subscribeToMaterials(workspaceId, items => setMaterials(items.filter(x => x.active)));
@@ -188,6 +191,28 @@ export function App() {
     setMaterialName(name);
     const material = materials.find(m => m.name === name);
     if (material) { setUnitPrice(String(material.defaultPrice)); setTransactionCurrency(material.currency); }
+  }
+
+  async function changeRole(member: SpaceMember) {
+    if (!workspaceId) return;
+    const role = member.role === "admin" ? "member" : "admin";
+    setBusy(true);
+    try {
+      await changeMemberRole(member.id, role);
+      setMembers(prev => prev.map(x => x.id === member.id ? { ...x, role } : x));
+    } catch { setError(tr("merchantError")); }
+    finally { setBusy(false); }
+  }
+
+  async function kickMember(member: SpaceMember) {
+    if (!workspaceId || member.role === "owner") return;
+    if (!window.confirm(language === "ar" ? "إزالة هذا العضو من المساحة؟" : language === "tr" ? "Bu üye alandan çıkarılsın mı?" : "Remove this member from the Space?")) return;
+    setBusy(true);
+    try {
+      await removeMember(member.id);
+      setMembers(prev => prev.filter(x => x.id !== member.id));
+    } catch { setError(tr("merchantError")); }
+    finally { setBusy(false); }
   }
 
   async function makeInvitation() {
@@ -448,6 +473,8 @@ export function App() {
       <label className="settings-field"><span>{ui.spaceName}</span><input value={workspaceName} onChange={e => setWorkspaceName(e.target.value)} /></label>
       <label className="settings-field"><span>{ui.defaultCurrency}</span><select value={workspaceDefaultCurrency} onChange={e => setWorkspaceDefaultCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select></label>
       <h3>{ui.paymentMethods}</h3>
+      <h3>{language === "ar" ? "الأعضاء" : language === "tr" ? "Üyeler" : "Members"}</h3>
+      <div className="settings-materials">{members.map(member => <div key={member.id}><strong>{member.displayName || member.email || member.userId}</strong> · {member.role === "owner" ? "Owner" : member.role === "admin" ? (language === "ar" ? "مدير" : language === "tr" ? "Yönetici" : "Manager") : (language === "ar" ? "عامل" : language === "tr" ? "Çalışan" : "Worker")} {member.role !== "owner" && <><button className="ghost small" disabled={busy} onClick={() => changeRole(member)}>{member.role === "admin" ? (language === "ar" ? "عامل" : language === "tr" ? "Çalışan" : "Worker") : (language === "ar" ? "مدير" : language === "tr" ? "Yönetici" : "Manager")}</button><button className="ghost danger small" disabled={busy} onClick={() => kickMember(member)}>{tr("delete")}</button></>}</div>)}</div>
       <h3>{language === "ar" ? "دعوة عضو" : language === "tr" ? "Üye davet et" : "Invite member"}</h3>
       <div className="form-row"><select value={inviteRole} onChange={e => setInviteRole(e.target.value as "admin" | "member")}><option value="admin">{language === "ar" ? "مدير" : language === "tr" ? "Yönetici" : "Manager"}</option><option value="member">{language === "ar" ? "عامل" : language === "tr" ? "Çalışan" : "Worker"}</option></select><button className="primary" disabled={busy} onClick={makeInvitation}>{language === "ar" ? "إنشاء دعوة" : language === "tr" ? "Davet oluştur" : "Create invitation"}</button></div>
       {inviteLink && <div className="invite-box"><input readOnly value={inviteLink} /><button className="ghost" onClick={() => navigator.clipboard.writeText(inviteLink)}>{language === "ar" ? "نسخ" : language === "tr" ? "Kopyala" : "Copy"}</button><button className="ghost" onClick={() => window.open("https://wa.me/?text=" + encodeURIComponent(inviteLink), "_blank")}>WhatsApp</button></div>}

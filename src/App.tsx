@@ -5,7 +5,7 @@ import { firebaseConfigured } from "./lib/firebase";
 import { archiveMerchant, createMerchant, restoreMerchant, subscribeToArchivedMerchants, subscribeToMerchants } from "./lib/merchants";
 import { getOrCreateWorkspace, listUserWorkspaces, createWorkspace, updateWorkspaceSettings, type WorkspaceSummary, type WorkspaceRole } from "./lib/workspaces";
 import { createPayment, createPurchase, deleteTransaction, subscribeToAuditEvents, subscribeToTransactions, updateTransaction } from "./lib/transactions";
-import { createMaterial, subscribeToMaterials } from "./lib/materials";
+import { createMaterial, subscribeToMaterials, updateMaterial } from "./lib/materials";
 import type { AuditEvent, Currency, Material, Merchant, Transaction } from "./lib/types";
 import { LANGUAGE_STORAGE_KEY, translations, type Language, type TranslationKey } from "./lib/i18n";
 import { exportMerchantStatement } from "./lib/export";
@@ -47,6 +47,8 @@ export function App() {
   const [merchantCurrency, setMerchantCurrency] = useState<Currency>("TRY");
   const [materialName, setMaterialName] = useState("");
   const [materialPrice, setMaterialPrice] = useState("");
+  const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
+  const [editingMaterialPrice, setEditingMaterialPrice] = useState("");
   const [materialCurrency, setMaterialCurrency] = useState<Currency>("TRY");
   const [date, setDate] = useState(today());
   const [quantity, setQuantity] = useState("");
@@ -247,6 +249,18 @@ export function App() {
     finally { setBusy(false); }
   }
 
+  async function saveMaterialPrice(material: Material) {
+    if (!workspaceId) return;
+    const price = Number(editingMaterialPrice);
+    if (!Number.isFinite(price) || price < 0) return;
+    setBusy(true); setError("");
+    try {
+      await updateMaterial(workspaceId, material.id, { defaultPrice: price });
+      setEditingMaterialId(null);
+    } catch { setError(tr("materialError")); }
+    finally { setBusy(false); }
+  }
+
   async function addMaterial() {
     if (!workspaceId || !materialName.trim()) return;
     const price = Number(materialPrice);
@@ -441,7 +455,7 @@ export function App() {
       <div className="form-row"><input value={newPaymentMethod} onChange={e => setNewPaymentMethod(e.target.value)} placeholder={ui.newPaymentMethod} /><button className="primary" onClick={addPaymentMethodSetting}>{tr("add")}</button></div>
       <h3>{tr("materials")}</h3>
       <div className="form-row"><input value={materialName} onChange={e => setMaterialName(e.target.value)} placeholder={tr("materialName")} /><input type="number" step="any" value={materialPrice} onChange={e => setMaterialPrice(e.target.value)} placeholder={tr("price")} /><select value={materialCurrency} onChange={e => setMaterialCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select><button className="primary" disabled={busy || !materialName.trim()} onClick={addMaterial}>{tr("addMaterial")}</button></div>
-      <div className="settings-materials">{materials.map(m => <div key={m.id}>{m.name} · {m.defaultPrice} {m.currency}</div>)}</div>
+      <div className="settings-materials">{materials.map(m => <div key={m.id}><strong>{m.name}</strong> · {editingMaterialId === m.id ? <input type="number" step="any" value={editingMaterialPrice} onChange={e => setEditingMaterialPrice(e.target.value)} /> : <span>{m.defaultPrice} {m.currency}</span>} <button className="ghost small" onClick={() => { if (editingMaterialId === m.id) saveMaterialPrice(m); else { setEditingMaterialId(m.id); setEditingMaterialPrice(String(m.defaultPrice)); } }}>{editingMaterialId === m.id ? tr("saveChanges") : tr("edit")}</button></div>)}</div>
       <button className="primary" disabled={busy} onClick={saveSpaceSettings}>{tr("saveChanges")}</button>
     </section>}
     <div className="tabs"><button className={merchantTab === "active" ? "tab active-tab" : "tab"} onClick={() => { setMerchantTab("active"); setMerchantSearch(""); }}>{tr("active")} ({merchants.length})</button><button className={merchantTab === "archived" ? "tab active-tab" : "tab"} onClick={() => { setMerchantTab("archived"); setMerchantSearch(""); }}>{tr("archived")} ({archivedMerchants.length})</button></div>

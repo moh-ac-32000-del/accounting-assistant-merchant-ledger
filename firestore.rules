@@ -180,11 +180,11 @@ service cloud.firestore {
           request.resource.data.actorId == request.auth.uid &&
           request.resource.data.action in ["created", "updated", "deleted", "archived", "restored"] &&
           (
-            request.resource.data.action == "created" ||
-            request.resource.data.action == "updated" ||
-            request.resource.data.action == "deleted"
-              ? canEditTransactions(workspaceId)
-              : canManageMerchants(workspaceId)
+            request.resource.data.action == "created"
+              ? canCreateTransactions(workspaceId)
+              : request.resource.data.action == "updated" || request.resource.data.action == "deleted"
+                ? canEditTransactions(workspaceId)
+                : canManageMerchants(workspaceId)
           );
         allow update, delete: if false;
       }

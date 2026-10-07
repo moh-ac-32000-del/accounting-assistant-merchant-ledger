@@ -175,9 +175,10 @@ service cloud.firestore {
     }
 
     match /memberships/{membershipId} {
-      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isOwner(resource.data.workspaceId) || isManager(resource.data.workspaceId));
       allow create: if (signedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.role == "owner" && exists(/databases/$(database)/documents/workspaces/$(request.resource.data.workspaceId)) && get(/databases/$(database)/documents/workspaces/$(request.resource.data.workspaceId)).data.ownerId == request.auth.uid) || invitedMembership(request.resource.data);
-      allow update, delete: if false;
+      allow update: if signedIn() && isOwner(resource.data.workspaceId) && request.resource.data.workspaceId == resource.data.workspaceId && request.resource.data.userId == resource.data.userId && request.resource.data.role in ["admin", "member"];
+      allow delete: if signedIn() && isOwner(resource.data.workspaceId) && resource.data.userId != request.auth.uid;
     }
   }
 }

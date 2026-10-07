@@ -3,7 +3,7 @@ import type { User } from "firebase/auth";
 import { signInWithGoogle, signOutUser, subscribeToAuth } from "./lib/auth";
 import { firebaseConfigured } from "./lib/firebase";
 import { archiveMerchant, createMerchant, restoreMerchant, subscribeToArchivedMerchants, subscribeToMerchants } from "./lib/merchants";
-import { getOrCreateWorkspace } from "./lib/workspaces";
+import { getOrCreateWorkspace, listUserWorkspaces, createWorkspace, updateWorkspaceSettings, type WorkspaceSummary, type WorkspaceRole } from "./lib/workspaces";
 import { createPayment, createPurchase, deleteTransaction, subscribeToAuditEvents, subscribeToTransactions, updateTransaction } from "./lib/transactions";
 import { createMaterial, subscribeToMaterials } from "./lib/materials";
 import type { AuditEvent, Currency, Material, Merchant, Transaction } from "./lib/types";
@@ -18,6 +18,12 @@ const money = (value: number, currency: Currency) =>
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [workspaces, setWorkspaces] = useState<Array<WorkspaceSummary & { role: WorkspaceRole }>>([]);
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [workspaceDefaultCurrency, setWorkspaceDefaultCurrency] = useState<Currency>("TRY");
+  const [paymentMethods, setPaymentMethods] = useState<Array<{ id: string; name: string; active: boolean }>>([]);
+  const [newPaymentMethod, setNewPaymentMethod] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [archivedMerchants, setArchivedMerchants] = useState<Merchant[]>([]);
   const [merchantTab, setMerchantTab] = useState<"active" | "archived">("active");
@@ -76,16 +82,37 @@ export function App() {
   useEffect(() => subscribeToAuth(setUser), []);
 
   useEffect(() => {
-    if (!user) { setWorkspaceId(null); setMerchants([]); setMaterials([]); return; }
+    if (!user) { setWorkspaceId(null); setWorkspaces([]); setMerchants([]); setMaterials([]); return; }
     let cancelled = false;
-    getOrCreateWorkspace(user.uid, user.displayName ?? undefined)
-      .then(ctx => { if (!cancelled) setWorkspaceId(ctx.workspaceId); })
+    listUserWorkspaces(user.uid)
+      .then(async spaces => {
+        if (cancelled) return;
+        if (spaces.length === 0) {
+          setWorkspaceId(null);
+          setWorkspaces([]);
+          return;
+        }
+        setWorkspaces(spaces);
+        const saved = localStorage.getItem("merchant-ledger-last-space");
+        const selected = spaces.find(s => s.id === saved) ?? spaces[0];
+        setWorkspaceId(selected.id);
+        setWorkspaceName(selected.name);
+        setWorkspaceDefaultCurrency((selected as any).defaultCurrency === "USD" ? "USD" : "TRY");
+        setPaymentMethods((selected as any).paymentMethods ?? [{ id: "cash", name: "Cash", active: true }]);
+      })
       .catch(() => { if (!cancelled) setError(tr("merchantError")); });
     return () => { cancelled = true; };
   }, [user]);
 
   useEffect(() => {
     if (!workspaceId) return;
+    localStorage.setItem("merchant-ledger-last-space", workspaceId);
+    const current = workspaces.find(w => w.id === workspaceId);
+    if (current) {
+      setWorkspaceName(current.name);
+      setWorkspaceDefaultCurrency((current as any).defaultCurrency === "USD" ? "USD" : "TRY");
+      setPaymentMethods((current as any).paymentMethods ?? [{ id: "cash", name: "Cash", active: true }]);
+    }
     const unsubMerchants = subscribeToMerchants(workspaceId, setMerchants);
     const unsubArchived = subscribeToArchivedMerchants(workspaceId, setArchivedMerchants);
     const unsubMaterials = subscribeToMaterials(workspaceId, items => setMaterials(items.filter(x => x.active)));
@@ -139,6 +166,46 @@ export function App() {
     setMaterialName(name);
     const material = materials.find(m => m.name === name);
     if (material) { setUnitPrice(String(material.defaultPrice)); setTransactionCurrency(material.currency); }
+  }
+
+  async function saveSpaceSettings() {
+    if (!workspaceId || !workspaceName.trim()) return;
+    setBusy(true); setError("");
+    try {
+      await updateWorkspaceSettings(workspaceId, {
+        name: workspaceName.trim(),
+        defaultCurrency: workspaceDefaultCurrency,
+        paymentMethods,
+      });
+      setWorkspaces(prev => prev.map(w => w.id === workspaceId ? { ...w, name: workspaceName.trim() } : w));
+      setSettingsOpen(false);
+    } catch { setError(tr("merchantError")); }
+    finally { setBusy(false); }
+  }
+
+  function addPaymentMethodSetting() {
+    const name = newPaymentMethod.trim();
+    if (!name) return;
+    if (paymentMethods.some(x => x.name.toLowerCase() === name.toLowerCase())) return;
+    setPaymentMethods(prev => [...prev, { id: crypto.randomUUID(), name, active: true }]);
+    setNewPaymentMethod("");
+  }
+
+  function togglePaymentMethod(id: string) {
+    setPaymentMethods(prev => prev.map(x => x.id === id ? { ...x, active: !x.active } : x));
+  }
+
+  async function createNewSpace() {
+    if (!user || !workspaceName.trim()) return;
+    setBusy(true); setError("");
+    try {
+      const ctx = await createWorkspace(user.uid, workspaceName);
+      const spaces = await listUserWorkspaces(user.uid);
+      setWorkspaces(spaces);
+      setWorkspaceId(ctx.workspaceId);
+      setSettingsOpen(false);
+    } catch { setError(tr("merchantError")); }
+    finally { setBusy(false); }
   }
 
   async function addMerchant() {
@@ -259,6 +326,8 @@ export function App() {
   if (!firebaseConfigured) return <main className="app-shell"><section className="welcome-card"><span className="eyebrow">{tr("merchantLedger")}</span><h1>{tr("setupRequired")}</h1><p>{tr("setupDescription")}</p></section></main>;
   if (!user) return <main className="app-shell"><section className="welcome-card"><LanguagePicker language={language} setLanguage={setLanguage} /> <span className="eyebrow">{tr("merchantLedger")}</span><h1>{tr("signInTitle")}</h1><p>{tr("signInDescription")}</p>{error && <div className="error">{error}</div>}<button className="primary" onClick={handleGoogleSignIn}>{tr("signInGoogle")}</button></section></main>;
 
+  if (user && workspaces.length === 0 && !workspaceId) return <main className="app-shell"><section className="welcome-card"><LanguagePicker language={language} setLanguage={setLanguage} /><span className="eyebrow">{tr("createSpace")}</span><h1>{tr("createSpaceTitle")}</h1><p>{tr("createSpaceDescription")}</p><input value={workspaceName} onChange={e => setWorkspaceName(e.target.value)} placeholder={tr("spaceName")} /><button className="primary" disabled={busy || !workspaceName.trim()} onClick={createNewSpace}>{tr("createSpace")}</button></section></main>;
+
   if (selectedMerchant) return <main className="app-shell"><section className="dashboard">
     <header className="topbar"><div><button className="ghost" onClick={() => setSelectedMerchant(null)}>{tr("backToMerchants")}</button><span className="eyebrow">{tr("merchantAccount")}</span><h1>{selectedMerchant.name}</h1></div><div className="top-actions"><LanguagePicker language={language} setLanguage={setLanguage} /><button className="ghost" onClick={() => signOutUser()}>{tr("signOut")}</button></div></header>
     {error && <div className="error">{error}</div>}
@@ -316,19 +385,31 @@ export function App() {
   </section></main>;
 
   return <main className="app-shell"><section className="dashboard">
-    <header className="topbar"><div><span className="eyebrow">{tr("merchantLedger")}</span><h1>{tr("merchants")}</h1></div><div className="top-actions"><LanguagePicker language={language} setLanguage={setLanguage} /><button className="ghost" onClick={() => signOutUser()}>{tr("signOut")}</button></div></header>
+    <header className="topbar"><div><span className="eyebrow">{tr("merchantLedger")}</span><h1>{tr("merchants")}</h1><select className="space-picker" value={workspaceId ?? ""} onChange={e => setWorkspaceId(e.target.value)}>{workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></div><div className="top-actions"><LanguagePicker language={language} setLanguage={setLanguage} /><button className="ghost" onClick={() => setSettingsOpen(true)}>{tr("settings")}</button><button className="ghost" onClick={() => signOutUser()}>{tr("signOut")}</button></div></header>
     {error && <div className="error">{error}</div>}
     <section className="add-card"><h2>{tr("addMerchant")}</h2><div className="form-row">
       <input value={merchantName} onChange={e => setMerchantName(e.target.value)} placeholder={tr("merchantName")} onKeyDown={e => e.key === "Enter" && addMerchant()} />
       <select value={merchantCurrency} onChange={e => setMerchantCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select>
       <button className="primary" disabled={busy || !merchantName.trim()} onClick={addMerchant}>{tr("add")}</button>
     </div></section>
-    <section className="add-card"><h2>{tr("materials")}</h2><div className="form-row">
+    {false && <section className="add-card"><h2>{tr("materials")}</h2><div className="form-row">
       <input value={materialName} onChange={e => setMaterialName(e.target.value)} placeholder={tr("materialName")} />
       <input type="number" step="any" value={materialPrice} onChange={e => setMaterialPrice(e.target.value)} placeholder={tr("price")} />
       <select value={materialCurrency} onChange={e => setMaterialCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select>
       <button className="primary" disabled={busy || !materialName.trim()} onClick={addMaterial}>{tr("addMaterial")}</button>
-    </div></section>
+    </div></section>}
+    {settingsOpen && <section className="settings-panel">
+      <div className="section-head"><h2>{tr("spaceSettings")}</h2><button className="ghost" onClick={() => setSettingsOpen(false)}>{tr("close")}</button></div>
+      <label className="settings-field"><span>{tr("spaceName")}</span><input value={workspaceName} onChange={e => setWorkspaceName(e.target.value)} /></label>
+      <label className="settings-field"><span>{tr("defaultCurrency")}</span><select value={workspaceDefaultCurrency} onChange={e => setWorkspaceDefaultCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select></label>
+      <h3>{tr("paymentMethods")}</h3>
+      <div className="payment-method-list">{paymentMethods.map(pm => <label key={pm.id}><input type="checkbox" checked={pm.active} onChange={() => togglePaymentMethod(pm.id)} /> {pm.name}</label>)}</div>
+      <div className="form-row"><input value={newPaymentMethod} onChange={e => setNewPaymentMethod(e.target.value)} placeholder={tr("newPaymentMethod")} /><button className="primary" onClick={addPaymentMethodSetting}>{tr("add")}</button></div>
+      <h3>{tr("materials")}</h3>
+      <div className="form-row"><input value={materialName} onChange={e => setMaterialName(e.target.value)} placeholder={tr("materialName")} /><input type="number" step="any" value={materialPrice} onChange={e => setMaterialPrice(e.target.value)} placeholder={tr("price")} /><select value={materialCurrency} onChange={e => setMaterialCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select><button className="primary" disabled={busy || !materialName.trim()} onClick={addMaterial}>{tr("addMaterial")}</button></div>
+      <div className="settings-materials">{materials.map(m => <div key={m.id}>{m.name} · {m.defaultPrice} {m.currency}</div>)}</div>
+      <button className="primary" disabled={busy} onClick={saveSpaceSettings}>{tr("saveChanges")}</button>
+    </section>}
     <div className="tabs"><button className={merchantTab === "active" ? "tab active-tab" : "tab"} onClick={() => { setMerchantTab("active"); setMerchantSearch(""); }}>{tr("active")} ({merchants.length})</button><button className={merchantTab === "archived" ? "tab active-tab" : "tab"} onClick={() => { setMerchantTab("archived"); setMerchantSearch(""); }}>{tr("archived")} ({archivedMerchants.length})</button></div>
     <input className="merchant-search" value={merchantSearch} onChange={e => setMerchantSearch(e.target.value)} placeholder={tr("searchMerchant")} />
     <section className="merchant-list">{visibleMerchants.length === 0 ? <div className="empty">{merchantSearch.trim() ? tr("noSearchResults") : (merchantTab === "active" ? tr("noMerchants") : tr("noArchivedMerchants"))}</div> : visibleMerchants.map(({merchant:m,displayName}) => <article className="merchant-card" key={m.id}><button className="merchant-open" onClick={() => setSelectedMerchant(m)}><h3>{displayName}</h3><span>{m.defaultCurrency === "TRY" ? "₺" : "$"} · {merchantTab === "active" ? tr("activeMerchant") : tr("archivedMerchant")}</span></button><button className="ghost" disabled={busy} onClick={() => changeMerchantArchive(m, merchantTab === "archived")}>{merchantTab === "active" ? tr("archive") : tr("restore")}</button></article>)}</section>

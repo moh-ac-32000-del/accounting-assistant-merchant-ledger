@@ -9,6 +9,7 @@ import { createMaterial, subscribeToMaterials } from "./lib/materials";
 import type { AuditEvent, Currency, Material, Merchant, Transaction } from "./lib/types";
 import { LANGUAGE_STORAGE_KEY, translations, type Language, type TranslationKey } from "./lib/i18n";
 import { exportMerchantStatement } from "./lib/export";
+import { acceptInvitation, createInvitation } from "./lib/invitations";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const money = (value: number, currency: Currency) =>
@@ -23,6 +24,8 @@ export function App() {
   const [workspaceDefaultCurrency, setWorkspaceDefaultCurrency] = useState<Currency>("TRY");
   const [paymentMethods, setPaymentMethods] = useState<Array<{ id: string; name: string; active: boolean }>>([]);
   const [newPaymentMethod, setNewPaymentMethod] = useState("");
+  const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
+  const [inviteLink, setInviteLink] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [archivedMerchants, setArchivedMerchants] = useState<Merchant[]>([]);
@@ -81,6 +84,22 @@ export function App() {
   }, [language]);
 
   useEffect(() => subscribeToAuth(setUser), []);
+
+  useEffect(() => {
+    if (!user) return;
+    const token = new URLSearchParams(window.location.search).get("invite");
+    if (!token) return;
+    setBusy(true);
+    acceptInvitation(token, user.uid)
+      .then(async () => {
+        window.history.replaceState({}, "", window.location.pathname);
+        const spaces = await listUserWorkspaces(user.uid);
+        setWorkspaces(spaces);
+        if (spaces[0]) setWorkspaceId(spaces[0].id);
+      })
+      .catch(() => setError(language === "ar" ? "تعذر قبول الدعوة." : language === "tr" ? "Davet kabul edilemedi." : "Invitation could not be accepted."))
+      .finally(() => setBusy(false));
+  }, [user]);
 
   useEffect(() => {
     if (!user) { setWorkspaceId(null); setWorkspaces([]); setMerchants([]); setMaterials([]); return; }
@@ -167,6 +186,17 @@ export function App() {
     setMaterialName(name);
     const material = materials.find(m => m.name === name);
     if (material) { setUnitPrice(String(material.defaultPrice)); setTransactionCurrency(material.currency); }
+  }
+
+  async function makeInvitation() {
+    if (!workspaceId || !user) return;
+    setBusy(true); setError("");
+    try {
+      const token = await createInvitation(workspaceId, user.uid, inviteRole);
+      const link = window.location.origin + window.location.pathname + "?invite=" + token;
+      setInviteLink(link);
+    } catch { setError(tr("merchantError")); }
+    finally { setBusy(false); }
   }
 
   async function saveSpaceSettings() {
@@ -404,6 +434,9 @@ export function App() {
       <label className="settings-field"><span>{ui.spaceName}</span><input value={workspaceName} onChange={e => setWorkspaceName(e.target.value)} /></label>
       <label className="settings-field"><span>{ui.defaultCurrency}</span><select value={workspaceDefaultCurrency} onChange={e => setWorkspaceDefaultCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select></label>
       <h3>{ui.paymentMethods}</h3>
+      <h3>{language === "ar" ? "دعوة عضو" : language === "tr" ? "Üye davet et" : "Invite member"}</h3>
+      <div className="form-row"><select value={inviteRole} onChange={e => setInviteRole(e.target.value as "admin" | "member")}><option value="admin">{language === "ar" ? "مدير" : language === "tr" ? "Yönetici" : "Manager"}</option><option value="member">{language === "ar" ? "عامل" : language === "tr" ? "Çalışan" : "Worker"}</option></select><button className="primary" disabled={busy} onClick={makeInvitation}>{language === "ar" ? "إنشاء دعوة" : language === "tr" ? "Davet oluştur" : "Create invitation"}</button></div>
+      {inviteLink && <div className="invite-box"><input readOnly value={inviteLink} /><button className="ghost" onClick={() => navigator.clipboard.writeText(inviteLink)}>{language === "ar" ? "نسخ" : language === "tr" ? "Kopyala" : "Copy"}</button><button className="ghost" onClick={() => window.open("https://wa.me/?text=" + encodeURIComponent(inviteLink), "_blank")}>WhatsApp</button></div>}
       <div className="payment-method-list">{paymentMethods.map(pm => <label key={pm.id}><input type="checkbox" checked={pm.active} onChange={() => togglePaymentMethod(pm.id)} /> {pm.name}</label>)}</div>
       <div className="form-row"><input value={newPaymentMethod} onChange={e => setNewPaymentMethod(e.target.value)} placeholder={ui.newPaymentMethod} /><button className="primary" onClick={addPaymentMethodSetting}>{tr("add")}</button></div>
       <h3>{tr("materials")}</h3>

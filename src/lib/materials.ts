@@ -27,3 +27,19 @@ export async function archiveMaterial(workspaceId: string, materialId: string) {
     active: false, updatedAt: serverTimestamp(),
   });
 }
+
+export async function updateMaterial(workspaceId: string, materialId: string, patch: { name?: string; defaultPrice?: number; currency?: Currency }) {
+  if (!db) throw new Error("Firebase is not configured.");
+  const data: Record<string, unknown> = { updatedAt: serverTimestamp() };
+  if (patch.name !== undefined) {
+    const name = patch.name.trim();
+    if (!name) throw new Error("Material name is required.");
+    data.name = name;
+  }
+  if (patch.defaultPrice !== undefined) {
+    if (!Number.isFinite(patch.defaultPrice) || patch.defaultPrice < 0) throw new Error("Invalid material price.");
+    data.defaultPrice = patch.defaultPrice;
+  }
+  if (patch.currency !== undefined) data.currency = patch.currency;
+  await updateDoc(doc(db, "workspaces", workspaceId, "materials", materialId), data);
+}

@@ -48,3 +48,17 @@ export async function updateWorkspaceSettings(workspaceId: string, patch: Record
   if (!db) throw new Error("Firebase is not configured.");
   await updateDoc(doc(db, "workspaces", workspaceId), { ...patch, updatedAt: serverTimestamp() });
 }
+export async function transferOwnership(workspaceId: string, currentOwnerId: string, newOwnerMembershipId: string, newOwnerUserId: string) {
+  if (!db) throw new Error("Firebase is not configured.");
+  const { writeBatch } = await import("firebase/firestore");
+  const batch = writeBatch(db);
+  batch.update(doc(db, "workspaces", workspaceId), { ownerId: newOwnerUserId, updatedAt: serverTimestamp() });
+  batch.update(doc(db, "memberships", workspaceId + "_" + currentOwnerId), { role: "admin" });
+  batch.update(doc(db, "memberships", newOwnerMembershipId), { role: "owner" });
+  await batch.commit();
+}
+
+export async function setDeputy(workspaceId: string, deputyUserId: string | null) {
+  if (!db) throw new Error("Firebase is not configured.");
+  await updateDoc(doc(db, "workspaces", workspaceId), { deputyId: deputyUserId, updatedAt: serverTimestamp() });
+}

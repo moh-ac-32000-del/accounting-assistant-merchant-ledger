@@ -207,15 +207,18 @@ export function App() {
     if (material) { setUnitPrice(String(material.defaultPrice)); setTransactionCurrency(material.currency); }
   }
 
-  async function toggleDeputy(member: SpaceMember) {\n    if (!workspaceId || member.role === "owner") return;\n    setBusy(true);\n    try {\n      const next = deputyId === member.userId ? null : member.userId;\n      await setDeputy(workspaceId, next);\n      setDeputyId(next);\n    } catch { setError(tr("merchantError")); }\n    finally { setBusy(false); }\n  }\n\n  async function changeRole(member: SpaceMember) {
-    if (!workspaceId) return;
-    const role = member.role === "admin" ? "member" : "admin";
+  async function toggleDeputy(member: SpaceMember) {
+    if (!workspaceId || member.role === "owner") return;
     setBusy(true);
     try {
-      await changeMemberRole(member.id, role);
-      setMembers(prev => prev.map(x => x.id === member.id ? { ...x, role } : x));
-    } catch { setError(tr("merchantError")); }
-    finally { setBusy(false); }
+      const next = deputyId === member.userId ? null : member.userId;
+      await setDeputy(workspaceId, next);
+      setDeputyId(next);
+    } catch {
+      setError(tr("merchantError"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function kickMember(member: SpaceMember) {

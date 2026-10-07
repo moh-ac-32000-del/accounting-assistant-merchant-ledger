@@ -33,6 +33,7 @@ export function App() {
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [merchantName, setMerchantName] = useState("");
+  const [merchantSearch, setMerchantSearch] = useState("");
   const [merchantCurrency, setMerchantCurrency] = useState<Currency>("TRY");
   const [materialName, setMaterialName] = useState("");
   const [materialPrice, setMaterialPrice] = useState("");
@@ -118,6 +119,21 @@ export function App() {
     }
     return result;
   }, [transactions]);
+
+  const visibleMerchants = useMemo(() => {
+    const source = merchantTab === "active" ? merchants : archivedMerchants;
+    const q = merchantSearch.trim().toLowerCase();
+    const filtered = q ? source.filter(m => m.name.toLowerCase().includes(q)) : source;
+    const counts = new Map<string, number>();
+    const seen = new Map<string, number>();
+    for (const merchant of filtered) counts.set(merchant.name, (counts.get(merchant.name) ?? 0) + 1);
+    return filtered.map(merchant => {
+      const total = counts.get(merchant.name) ?? 1;
+      const index = (seen.get(merchant.name) ?? 0) + 1;
+      seen.set(merchant.name, index);
+      return { merchant, displayName: total > 1 ? String(index) + " " + merchant.name : merchant.name };
+    });
+  }, [merchantTab, merchants, archivedMerchants, merchantSearch]);
 
   function selectMaterial(name: string) {
     setMaterialName(name);
@@ -252,9 +268,9 @@ export function App() {
       currency: tr("currency"), note: tr("note"), purchase: tr("purchase"), payment: tr("payment"),
       summary: tr("statement"), balance: tr("balance"), purchases: tr("purchases"), payments: tr("payments"),
     })}>{tr("exportStatement")}</button></div>
-    <section className="balance-grid">
+    <div className="floating-balance"><section className="balance-grid">
       {(["TRY","USD"] as Currency[]).map(c => <article className="balance-card" key={c}><span>{c}</span><strong>{money(balances[c].purchases - balances[c].payments, c)}</strong><small>{balances[c].purchases >= balances[c].payments ? tr("owed") : tr("credit")}</small></article>)}
-    </section>
+    </section></div>
     <section className="add-card"><h2>{tr("addPurchase")}</h2><div className="form-grid">
       <input list="materials" value={materialName} onChange={e => selectMaterial(e.target.value)} placeholder={tr("material")} />
       <datalist id="materials">{filteredMaterials.map(m => <option key={m.id} value={m.name}>{m.defaultPrice}</option>)}</datalist>
@@ -313,8 +329,9 @@ export function App() {
       <select value={materialCurrency} onChange={e => setMaterialCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select>
       <button className="primary" disabled={busy || !materialName.trim()} onClick={addMaterial}>{tr("addMaterial")}</button>
     </div></section>
-    <div className="tabs"><button className={merchantTab === "active" ? "tab active-tab" : "tab"} onClick={() => setMerchantTab("active")}>{tr("active")} ({merchants.length})</button><button className={merchantTab === "archived" ? "tab active-tab" : "tab"} onClick={() => setMerchantTab("archived")}>{tr("archived")} ({archivedMerchants.length})</button></div>
-    <section className="merchant-list">{(merchantTab === "active" ? merchants : archivedMerchants).length === 0 ? <div className="empty">{merchantTab === "active" ? tr("noMerchants") : tr("noArchivedMerchants")}</div> : (merchantTab === "active" ? merchants : archivedMerchants).map(m => <article className="merchant-card" key={m.id}><button className="merchant-open" onClick={() => setSelectedMerchant(m)}><h3>{m.name}</h3><span>{m.defaultCurrency === "TRY" ? "₺" : "$"} · {merchantTab === "active" ? tr("activeMerchant") : tr("archivedMerchant")}</span></button><button className="ghost" disabled={busy} onClick={() => changeMerchantArchive(m, merchantTab === "archived")}>{merchantTab === "active" ? tr("archive") : tr("restore")}</button></article>)}</section>
+    <div className="tabs"><button className={merchantTab === "active" ? "tab active-tab" : "tab"} onClick={() => { setMerchantTab("active"); setMerchantSearch(""); }}>{tr("active")} ({merchants.length})</button><button className={merchantTab === "archived" ? "tab active-tab" : "tab"} onClick={() => { setMerchantTab("archived"); setMerchantSearch(""); }}>{tr("archived")} ({archivedMerchants.length})</button></div>
+    <input className="merchant-search" value={merchantSearch} onChange={e => setMerchantSearch(e.target.value)} placeholder={tr("searchMerchant")} />
+    <section className="merchant-list">{visibleMerchants.length === 0 ? <div className="empty">{merchantSearch.trim() ? tr("noSearchResults") : (merchantTab === "active" ? tr("noMerchants") : tr("noArchivedMerchants"))}</div> : visibleMerchants.map(({merchant:m,displayName}) => <article className="merchant-card" key={m.id}><button className="merchant-open" onClick={() => setSelectedMerchant(m)}><h3>{displayName}</h3><span>{m.defaultCurrency === "TRY" ? "₺" : "$"} · {merchantTab === "active" ? tr("activeMerchant") : tr("archivedMerchant")}</span></button><button className="ghost" disabled={busy} onClick={() => changeMerchantArchive(m, merchantTab === "archived")}>{merchantTab === "active" ? tr("archive") : tr("restore")}</button></article>)}</section>
   </section></main>;
 }
 

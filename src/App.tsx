@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import { signInWithGoogle, signOutUser, subscribeToAuth } from "./lib/auth";
 import { firebaseConfigured } from "./lib/firebase";
-import { archiveMerchant, createMerchant, restoreMerchant, subscribeToArchivedMerchants, subscribeToMerchants } from "./lib/merchants";
+import { archiveMerchant, createMerchant, restoreMerchant, subscribeToArchivedMerchants, subscribeToMerchants, autoArchiveInactiveMerchants } from "./lib/merchants";
 import { getOrCreateWorkspace, listUserWorkspaces, createWorkspace, updateWorkspaceSettings, setDeputy, type WorkspaceSummary, type WorkspaceRole } from "./lib/workspaces";
 import { createPayment, createPurchase, deleteTransaction, subscribeToAuditEvents, subscribeToTransactions, updateTransaction } from "./lib/transactions";
 import { createMaterial, subscribeToMaterials, updateMaterial } from "./lib/materials";
@@ -147,6 +147,13 @@ export function App() {
     const unsubMaterials = subscribeToMaterials(workspaceId, items => setMaterials(items.filter(x => x.active)));
     return () => { unsubMerchants(); unsubArchived(); unsubMaterials(); };
   }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || !user || !merchants.length) return;
+    const current = workspaces.find(w => w.id === workspaceId) as any;
+    const days = Number(current?.merchantArchiveDays ?? 90);
+    autoArchiveInactiveMerchants(workspaceId, merchants, days, user.uid).catch(() => undefined);
+  }, [workspaceId, merchants.length, user?.uid]);
 
   useEffect(() => {
     if (!workspaceId || !selectedMerchant) { setTransactions([]); return; }

@@ -186,6 +186,8 @@ export const translations = {
     signInDescription: "Sign in with Google to access your cloud data.",
     signInGoogle: "Sign in with Google",
     signOut: "Sign out",
+    searchMerchant: "Search merchants",
+    noSearchResults: "No results found",
     setupRequired: "Setup required",
     setupDescription: "Add Firebase runtime configuration before enabling cloud storage.",
     merchants: "Merchants",

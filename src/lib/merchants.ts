@@ -75,6 +75,38 @@ export async function createMerchant(
 
 export async function archiveMerchant(workspaceId: string, merchantId: string, userId: string) {
   if (!db) throw new Error("Firebase is not configured.");
+
+  // A merchant may only be archived when every non-deleted balance is zero.
+  // Balances are kept separate by currency; TRY and USD must both be zero.
+  const transactionsSnap = await getDocs(
+    collection(db, "workspaces", workspaceId, "merchants", merchantId, "transactions"),
+  );
+  let tryBalance = 0;
+  let usdBalance = 0;
+  for (const item of transactionsSnap.docs) {
+    const transaction = item.data() as {
+      type?: string;
+      currency?: string;
+      total?: number;
+      amount?: number;
+      deleted?: boolean;
+    };
+    if (transaction.deleted) continue;
+    const value = Number(
+      transaction.type === "purchase" ? transaction.total ?? 0 : transaction.amount ?? 0,
+    );
+    if (transaction.currency === "TRY") {
+      tryBalance += transaction.type === "purchase" ? value : -value;
+    } else if (transaction.currency === "USD") {
+      usdBalance += transaction.type === "purchase" ? value : -value;
+    }
+  }
+
+  const epsilon = 1e-9;
+  if (Math.abs(tryBalance) > epsilon || Math.abs(usdBalance) > epsilon) {
+    throw new Error("لا يمكن أرشفة التاجر قبل أن يصبح الرصيد صفراً في جميع العملات.");
+  }
+
   const merchantRef = doc(db, "workspaces", workspaceId, "merchants", merchantId);
   const auditRef = doc(collection(db, "workspaces", workspaceId, "auditEvents"));
   const batch = writeBatch(db);

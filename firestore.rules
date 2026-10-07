@@ -19,6 +19,24 @@ service cloud.firestore {
         membership(workspaceId).data.role in ["owner", "admin"];
     }
 
+    function workerPermission(workspaceId, permission) {
+      return isMember(workspaceId) &&
+        membership(workspaceId).data.role == "member" &&
+        get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.workerPermissions[permission] == true;
+    }
+
+    function canManageMerchants(workspaceId) {
+      return isManager(workspaceId) || workerPermission(workspaceId, "manageMerchants");
+    }
+
+    function canManageMaterials(workspaceId) {
+      return isManager(workspaceId) || workerPermission(workspaceId, "manageMaterials");
+    }
+
+    function canEditTransactions(workspaceId) {
+      return isManager(workspaceId) || workerPermission(workspaceId, "editDeleteTransactions");
+    }
+
     function isOwner(workspaceId) {
       return isMember(workspaceId) &&
         get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
@@ -92,21 +110,21 @@ service cloud.firestore {
 
       match /merchants/{merchantId} {
         allow read: if isMember(workspaceId);
-        allow create: if isManager(workspaceId) &&
+        allow create: if canManageMerchants(workspaceId) &&
           validMerchant(request.resource.data, workspaceId);
-        allow update: if isManager(workspaceId) &&
+        allow update: if canManageMerchants(workspaceId) &&
           resource.data.workspaceId == workspaceId &&
           validMerchant(request.resource.data, workspaceId);
         allow delete: if false;
 
         match /transactions/{transactionId} {
           allow read: if isMember(workspaceId);
-          allow create: if isManager(workspaceId) &&
+          allow create: if canEditTransactions(workspaceId) &&
             (
               validPurchase(request.resource.data, workspaceId, merchantId) ||
               validPayment(request.resource.data, workspaceId, merchantId)
             );
-          allow update: if isManager(workspaceId) &&
+          allow update: if canEditTransactions(workspaceId) &&
             resource.data.workspaceId == workspaceId &&
             request.resource.data.workspaceId == workspaceId &&
             request.resource.data.merchantId == merchantId &&
@@ -124,7 +142,7 @@ service cloud.firestore {
 
       match /materials/{materialId} {
         allow read: if isMember(workspaceId);
-        allow create, update: if isManager(workspaceId) &&
+        allow create, update: if canManageMaterials(workspaceId) &&
           validMaterial(request.resource.data, workspaceId);
         allow delete: if false;
       }

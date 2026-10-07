@@ -221,6 +221,21 @@ export function App() {
     }
   }
 
+  async function changeRole(member: SpaceMember) {
+    if (!workspaceId || member.role === "owner") return;
+    setBusy(true);
+    setError("");
+    try {
+      const nextRole: "admin" | "member" = member.role === "admin" ? "member" : "admin";
+      await changeMemberRole(member.id, nextRole);
+      setMembers(prev => prev.map(x => x.id === member.id ? { ...x, role: nextRole } : x));
+    } catch {
+      setError(tr("merchantError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function kickMember(member: SpaceMember) {
     if (!workspaceId || member.role === "owner") return;
     if (!window.confirm(language === "ar" ? "إزالة هذا العضو من المساحة؟" : language === "tr" ? "Bu üye alandan çıkarılsın mı?" : "Remove this member from the Space?")) return;

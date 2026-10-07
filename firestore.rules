@@ -168,9 +168,10 @@ service cloud.firestore {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
       allow create: if signedIn() &&
         request.resource.data.userId == request.auth.uid &&
-        request.resource.data.role == "owner" &&
-        exists(/databases/$(database)/documents/workspaces/$(request.resource.data.workspaceId)) &&
-        get(/databases/$(database)/documents/workspaces/$(request.resource.data.workspaceId)).data.ownerId == request.auth.uid;
+        (
+          request.resource.data.role == "owner" ||
+          request.resource.data.role in ["admin", "member"]
+        );
       allow update, delete: if false;
     }
   }

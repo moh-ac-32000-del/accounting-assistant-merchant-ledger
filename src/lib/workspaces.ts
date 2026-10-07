@@ -1,41 +1,50 @@
 import {
-  addDoc, collection, doc, getDocs, limit, orderBy, query, serverTimestamp,
-  setDoc, where,
+  addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp,
+  setDoc, updateDoc, where,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
-export interface WorkspaceContext {
-  workspaceId: string;
-  role: "owner" | "admin" | "member";
+export type WorkspaceRole = "owner" | "admin" | "member";
+export interface WorkspaceContext { workspaceId: string; role: WorkspaceRole; }
+export interface WorkspaceSummary { id: string; name: string; ownerId: string; archived?: boolean; createdAt?: unknown; updatedAt?: unknown; }
+export interface Membership { workspaceId: string; userId: string; role: WorkspaceRole; createdAt?: unknown; }
+
+export async function listUserWorkspaces(userId: string): Promise<Array<WorkspaceSummary & { role: WorkspaceRole }>> {
+  if (!db) throw new Error("Firebase is not configured.");
+  const memberships = await getDocs(query(collection(db, "memberships"), where("userId", "==", userId)));
+  if (memberships.empty) return [];
+  const results = await Promise.all(memberships.docs.map(async membershipDoc => {
+    const membership = membershipDoc.data() as Membership;
+    const snap = await getDoc(doc(db!, "workspaces", membership.workspaceId));
+    if (!snap.exists()) return null;
+    const data = snap.data() as WorkspaceSummary;
+    return { ...data, id: snap.id, role: membership.role };
+  }));
+  return results.filter(Boolean) as Array<WorkspaceSummary & { role: WorkspaceRole }>;
+}
+
+export async function createWorkspace(userId: string, name: string): Promise<WorkspaceContext> {
+  if (!db) throw new Error("Firebase is not configured.");
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("اسم الـSpace مطلوب.");
+  const workspaceRef = await addDoc(collection(db, "workspaces"), {
+    name: trimmed, ownerId: userId, archived: false, defaultCurrency: "TRY",
+    merchantArchiveDays: 90,
+    paymentMethods: [{ id: "cash", name: "Cash", active: true }],
+    workerPermissions: { editDeleteTransactions: true, manageMaterials: true, manageReferencePrices: true, managePaymentMethods: true, manageMerchants: true },
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  await setDoc(doc(db, "memberships", workspaceRef.id + "_" + userId), { workspaceId: workspaceRef.id, userId, role: "owner", createdAt: serverTimestamp() });
+  return { workspaceId: workspaceRef.id, role: "owner" };
 }
 
 export async function getOrCreateWorkspace(userId: string, displayName?: string): Promise<WorkspaceContext> {
+  const spaces = await listUserWorkspaces(userId);
+  if (spaces.length) return { workspaceId: spaces[0].id, role: spaces[0].role };
+  return createWorkspace(userId, displayName?.trim() ? displayName.trim() + " — حسابات التجار" : "حسابات التجار");
+}
+
+export async function updateWorkspaceSettings(workspaceId: string, patch: Record<string, unknown>) {
   if (!db) throw new Error("Firebase is not configured.");
-
-  const memberships = await getDocs(query(
-    collection(db, "memberships"),
-    where("userId", "==", userId),
-    limit(1),
-  ));
-
-  if (!memberships.empty) {
-    const membership = memberships.docs[0].data() as { workspaceId: string; role?: WorkspaceContext["role"] };
-    return { workspaceId: membership.workspaceId, role: membership.role ?? "member" };
-  }
-
-  const workspaceRef = await addDoc(collection(db, "workspaces"), {
-    name: displayName?.trim() ? `${displayName.trim()} — حسابات التجار` : "حسابات التجار",
-    ownerId: userId,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  await setDoc(doc(db, "memberships", `${workspaceRef.id}_${userId}`), {
-    workspaceId: workspaceRef.id,
-    userId,
-    role: "owner",
-    createdAt: serverTimestamp(),
-  });
-
-  return { workspaceId: workspaceRef.id, role: "owner" };
+  await updateDoc(doc(db, "workspaces", workspaceId), { ...patch, updatedAt: serverTimestamp() });
 }

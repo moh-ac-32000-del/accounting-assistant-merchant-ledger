@@ -157,6 +157,19 @@ export async function restoreMerchant(workspaceId: string, merchantId: string, u
 
 import { getDocs } from "firebase/firestore";
 
+function timestampMillis(value: unknown): number {
+  if (typeof value === "string") {
+    const ms = Date.parse(value);
+    return Number.isFinite(ms) ? ms : 0;
+  }
+  if (value && typeof value === "object") {
+    const item = value as { toMillis?: () => number; toDate?: () => Date };
+    if (typeof item.toMillis === "function") return item.toMillis();
+    if (typeof item.toDate === "function") return item.toDate().getTime();
+  }
+  return 0;
+}
+
 export async function autoArchiveInactiveMerchants(workspaceId: string, merchants: Merchant[], inactiveDays: number, actorId: string) {
   if (!db || inactiveDays <= 0) return;
   const cutoff = Date.now() - inactiveDays * 24 * 60 * 60 * 1000;
@@ -165,16 +178,17 @@ export async function autoArchiveInactiveMerchants(workspaceId: string, merchant
     const snap = await getDocs(collection(db, "workspaces", workspaceId, "merchants", merchant.id, "transactions"));
     let tryBalance = 0;
     let usdBalance = 0;
-    let latest = merchant.createdAt;
+    let latestMs = timestampMillis(merchant.createdAt);
     for (const d of snap.docs) {
       const t = d.data() as { type?: string; currency?: string; total?: number; amount?: number; date?: string; createdAt?: unknown; deleted?: boolean };
       if (t.deleted) continue;
       const value = Number(t.type === "purchase" ? t.total ?? 0 : t.amount ?? 0);
       if (t.currency === "TRY") tryBalance += t.type === "purchase" ? value : -value;
       if (t.currency === "USD") usdBalance += t.type === "purchase" ? value : -value;
-      if (String(t.date ?? "") > String(latest ?? "")) latest = t.date;
+      if (typeof t.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(t.date)) {
+        latestMs = Math.max(latestMs, new Date(t.date + "T23:59:59").getTime());
+      }
     }
-    const latestMs = typeof latest === "string" && /^\d{4}-\d{2}-\d{2}$/.test(latest) ? new Date(latest + "T23:59:59").getTime() : 0;
     if (tryBalance === 0 && usdBalance === 0 && latestMs > 0 && latestMs < cutoff) {
       await archiveMerchant(workspaceId, merchant.id, actorId);
     }

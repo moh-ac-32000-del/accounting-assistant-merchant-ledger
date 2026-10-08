@@ -62,6 +62,7 @@ export function App() {
   const [date, setDate] = useState(today());
   const [statementFrom, setStatementFrom] = useState("");
   const [statementTo, setStatementTo] = useState("");
+  const [statementCurrency, setStatementCurrency] = useState<Currency | "ALL">("TRY");
   const [quantity, setQuantity] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -172,6 +173,7 @@ export function App() {
   useEffect(() => {
     if (!selectedMerchant) return;
     setTransactionCurrency(workspaceDefaultCurrency);
+    setStatementCurrency(workspaceDefaultCurrency);
     setPaymentMethod((paymentMethods.find(x => x.active)?.name) ?? tr("cash"));
   }, [selectedMerchant?.id, language, workspaceDefaultCurrency]);
 
@@ -571,12 +573,12 @@ export function App() {
   if (selectedMerchant) return <main className="app-shell"><section className="dashboard">
     <header className="topbar"><div><button className="ghost" onClick={() => setSelectedMerchant(null)}>{tr("backToMerchants")}</button><span className="eyebrow">{tr("merchantAccount")}</span><h1>{selectedMerchant.name}</h1></div><div className="top-actions"><LanguagePicker language={language} setLanguage={setLanguage} /><button className="ghost" onClick={() => signOutUser()}>{tr("signOut")}</button></div></header>
     {error && <div className="error">{error}</div>}
-    <div className="toolbar"><input type="date" value={statementFrom} onChange={e => setStatementFrom(e.target.value)} /><input type="date" value={statementTo} onChange={e => setStatementTo(e.target.value)} /><button className="ghost" onClick={() => selectedMerchant && shareStatementImage(selectedMerchant, transactions.filter(t => (!statementFrom || t.date >= statementFrom) && (!statementTo || t.date <= statementTo)), language).catch(() => setError(tr("exportError")))}>{language === "ar" ? "مشاركة صورة" : language === "tr" ? "Görsel paylaş" : "Share image"}</button><button className="ghost" onClick={() => selectedMerchant && exportMerchantStatement(selectedMerchant, transactions.filter(t => (!statementFrom || t.date >= statementFrom) && (!statementTo || t.date <= statementTo)), {
+    <div className="toolbar"><input type="date" value={statementFrom} onChange={e => setStatementFrom(e.target.value)} /><input type="date" value={statementTo} onChange={e => setStatementTo(e.target.value)} /><select value={statementCurrency} onChange={e => setStatementCurrency(e.target.value as Currency | "ALL")}><option value="ALL">{language === "ar" ? "كل العملات" : language === "tr" ? "Tüm para birimleri" : "All currencies"}</option><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select><button className="ghost" onClick={() => selectedMerchant && shareStatementImage(selectedMerchant, transactions.filter(t => (!statementFrom || t.date >= statementFrom) && (!statementTo || t.date <= statementTo) && (statementCurrency === "ALL" || t.currency === statementCurrency)), language).catch(() => setError(tr("exportError")))}>{language === "ar" ? "مشاركة صورة" : language === "tr" ? "Görsel paylaş" : "Share image"}</button><button className="ghost" onClick={() => selectedMerchant && exportMerchantStatement(selectedMerchant, transactions, {
       date: tr("date"), type: language === "ar" ? "النوع" : language === "tr" ? "Tür" : "Type",
       material: tr("material"), quantity: tr("quantity"), unitPrice: tr("unitPrice"), amount: tr("amount"),
       currency: tr("currency"), note: tr("note"), purchase: tr("purchase"), payment: tr("payment"),
       summary: tr("statement"), balance: tr("balance"), purchases: tr("purchases"), payments: tr("payments"),
-    })}>{tr("exportStatement")}</button></div>
+    }, { from: statementFrom || undefined, to: statementTo || undefined, currency: statementCurrency })}>{tr("exportStatement")}</button></div>
     <div className="floating-balance"><section className="balance-grid">
       {(["TRY","USD"] as Currency[]).map(c => { const diff = balances[c].purchases - balances[c].payments; return <article className={"balance-card " + (diff < 0 ? "credit-balance" : diff > 0 ? "owed-balance" : "zero-balance")} key={c}><span>{c}</span><strong>{money(diff, c)}</strong><small>{diff > 0 ? tr("owed") : diff < 0 ? tr("credit") : "0"}</small></article>; })}
     </section></div>

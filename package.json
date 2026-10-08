@@ -20,5 +20,8 @@
     "@vitejs/plugin-react": "^5.0.4",
     "typescript": "^5.9.2",
     "vite": "^7.1.7"
+  },
+  "overrides": {
+    "xlsx": "npm:@keep-lts/xlsx@^0.18.6"
   }
 }

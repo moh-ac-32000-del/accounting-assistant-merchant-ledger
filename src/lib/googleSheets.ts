@@ -1,6 +1,6 @@
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { auth } from "./firebase";
-import type { Currency, Merchant, Transaction } from "./types";
+import type { Merchant, Transaction } from "./types";
 
 const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 

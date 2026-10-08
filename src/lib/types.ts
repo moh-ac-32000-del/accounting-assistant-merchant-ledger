@@ -51,7 +51,10 @@ export interface Transaction {
   deletedBy?: string;
 }
 
-export type AuditAction = "created" | "updated" | "deleted" | "archived" | "restored";
+export type AuditAction =
+  | "created" | "updated" | "deleted" | "archived" | "restored"
+  | "ownership_transferred" | "deputy_changed"
+  | "space_archived" | "space_restored" | "space_deleted";
 
 export interface AuditEvent {
   id: string;

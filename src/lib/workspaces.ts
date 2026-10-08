@@ -93,12 +93,23 @@ export async function transferOwnership(
   batch.update(doc(db, "workspaces", workspaceId), { ownerId: newOwnerUserId, updatedAt: serverTimestamp() });
   batch.update(doc(db, "memberships", workspaceId + "_" + currentOwnerId), { role: "admin" });
   batch.update(newOwnerMembershipRef, { role: "owner" });
+  batch.set(doc(collection(db, "workspaces", workspaceId, "auditEvents")), {
+    workspaceId,
+    actorId: currentOwnerId,
+    action: "ownership_transferred",
+    summary: "نقل ملكية المساحة",
+    before: { ownerId: currentOwnerId },
+    after: { ownerId: newOwnerUserId },
+    createdAt: serverTimestamp(),
+  });
   await batch.commit();
 }
 
 export async function setDeputy(workspaceId: string, deputyUserId: string | null) {
   if (!db) throw new Error("Firebase is not configured.");
   const workspaceRef = doc(db, "workspaces", workspaceId);
+  const workspaceSnap = await getDoc(workspaceRef);
+  if (!workspaceSnap.exists()) throw new Error("Space not found.");
   if (deputyUserId) {
     const membershipSnap = await getDoc(doc(db, "memberships", workspaceId + "_" + deputyUserId));
     if (!membershipSnap.exists()) throw new Error("Deputy must be an existing member.");

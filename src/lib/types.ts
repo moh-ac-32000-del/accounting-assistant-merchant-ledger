@@ -53,7 +53,7 @@ export interface Transaction {
 
 export type AuditAction =
   | "created" | "updated" | "deleted" | "archived" | "restored"
-  | "ownership_transferred" | "deputy_changed"
+  | "ownership_transferred" | "ownership_emergency_activated" | "deputy_changed"
   | "space_archived" | "space_restored" | "space_deleted";
 
 export interface AuditEvent {

@@ -97,3 +97,24 @@ export async function shareStatementImage(merchant: Merchant, transactions: Tran
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+
+export async function copyStatementForGoogleSheets(merchant: Merchant, transactions: Transaction[], language: "ar" | "tr" | "en") {
+  const header = language === "ar"
+    ? ["التاريخ", "النوع", "التفاصيل", "العملة", "المبلغ"]
+    : language === "tr"
+      ? ["Tarih", "Tür", "Detay", "Para birimi", "Tutar"]
+      : ["Date", "Type", "Details", "Currency", "Amount"];
+  const rows = transactions.map(t => {
+    const type = labelForTransaction(t, language);
+    const details = t.type === "purchase"
+      ? `${t.materialNameSnapshot ?? ""} | ${t.quantity ?? ""} | ${t.unitPrice ?? ""}`
+      : t.paymentMethod ?? "";
+    const amount = t.type === "purchase" ? t.total ?? 0 : t.amount ?? 0;
+    return [t.date, type, details, t.currency, String(amount)];
+  });
+  const text = [[merchant.name, "", "", "", ""], header, ...rows]
+    .map(row => row.map(value => String(value).replace(/\t|\r?\n/g, " ")).join("\t"))
+    .join("\n");
+  await navigator.clipboard.writeText(text);
+}

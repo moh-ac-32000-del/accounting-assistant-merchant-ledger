@@ -10,7 +10,7 @@ import type { AuditEvent, Currency, Material, Merchant, Transaction } from "./li
 import { LANGUAGE_STORAGE_KEY, translations, type Language, type TranslationKey } from "./lib/i18n";
 import { exportMerchantStatement } from "./lib/export";
 import { shareStatementImage } from "./lib/share";
-import { acceptInvitation, createInvitation } from "./lib/invitations";
+import { acceptInvitation, cancelInvitation, createInvitation } from "./lib/invitations";
 import { changeMemberRole, listMembers, removeMember, updateMemberPermissions, type SpaceMember } from "./lib/members";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -29,6 +29,7 @@ export function App() {
   const [newPaymentMethod, setNewPaymentMethod] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [inviteLink, setInviteLink] = useState("");
+  const [inviteToken, setInviteToken] = useState("");
   const [members, setMembers] = useState<SpaceMember[]>([]);
   const [deputyId, setDeputyId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -292,6 +293,20 @@ export function App() {
     finally { setBusy(false); }
   }
 
+  async function cancelCurrentInvitation() {
+    if (!inviteToken) return;
+    setBusy(true); setError("");
+    try {
+      await cancelInvitation(inviteToken);
+      setInviteToken("");
+      setInviteLink("");
+    } catch {
+      setError(tr("merchantError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function archiveCurrentWorkspace() {
     if (!workspaceId || !isOwner) return;
     if (!window.confirm(language === "ar" ? "أرشفة هذه المساحة؟ لن يمكن تسجيل عمليات جديدة حتى استعادتها." : language === "tr" ? "Bu alan arşivlensin mi? Geri yüklenene kadar yeni işlem kaydedilemez." : "Archive this Space? New transactions will be disabled until it is restored.")) return;
@@ -344,6 +359,7 @@ export function App() {
     try {
       const token = await createInvitation(workspaceId, user.uid, inviteRole);
       const link = window.location.origin + window.location.pathname + "?invite=" + token;
+      setInviteToken(token);
       setInviteLink(link);
     } catch { setError(tr("merchantError")); }
     finally { setBusy(false); }
@@ -606,7 +622,7 @@ export function App() {
       })}</div>
       <h3>{language === "ar" ? "دعوة عضو" : language === "tr" ? "Üye davet et" : "Invite member"}</h3>
       <div className="form-row"><select value={inviteRole} onChange={e => setInviteRole(e.target.value as "admin" | "member")}><option value="admin">{language === "ar" ? "مدير" : language === "tr" ? "Yönetici" : "Manager"}</option><option value="member">{language === "ar" ? "عامل" : language === "tr" ? "Çalışan" : "Worker"}</option></select><button className="primary" disabled={busy} onClick={makeInvitation}>{language === "ar" ? "إنشاء دعوة" : language === "tr" ? "Davet oluştur" : "Create invitation"}</button></div>
-      {inviteLink && <div className="invite-box"><input readOnly value={inviteLink} /><button className="ghost" onClick={() => navigator.clipboard.writeText(inviteLink)}>{language === "ar" ? "نسخ" : language === "tr" ? "Kopyala" : "Copy"}</button><button className="ghost" onClick={() => window.open("https://wa.me/?text=" + encodeURIComponent(inviteLink), "_blank")}>WhatsApp</button></div>}
+      {inviteLink && <div className="invite-box"><input readOnly value={inviteLink} /><button className="ghost" onClick={() => navigator.clipboard.writeText(inviteLink)}>{language === "ar" ? "نسخ" : language === "tr" ? "Kopyala" : "Copy"}</button><button className="ghost" onClick={() => window.open("https://wa.me/?text=" + encodeURIComponent(inviteLink), "_blank")}>WhatsApp</button><button className="ghost danger" disabled={busy} onClick={cancelCurrentInvitation}>{language === "ar" ? "إلغاء الدعوة" : language === "tr" ? "Daveti iptal et" : "Cancel invitation"}</button></div>}
       <div className="payment-method-list">{paymentMethods.map(pm => <label key={pm.id}><input type="checkbox" checked={pm.active} disabled={!isOwner || busy} onChange={() => togglePaymentMethod(pm.id)} /> {pm.name}</label>)}</div>
       <h3>{language === "ar" ? "صلاحيات العامل" : language === "tr" ? "Çalışan izinleri" : "Worker permissions"}</h3>
       <div className="payment-method-list">{Object.entries(workerPermissions).map(([key, value]) => <label key={key}><input type="checkbox" checked={value} disabled={!isOwner || busy} onChange={() => setWorkerPermissions(prev => ({ ...prev, [key]: !prev[key as keyof typeof prev] }))} /> {key === "editDeleteTransactions" ? tr("edit") + " / " + tr("delete") : key === "manageMaterials" ? tr("materials") : key === "manageReferencePrices" ? tr("price") : key === "managePaymentMethods" ? ui.paymentMethods : tr("merchants")}</label>)}</div>

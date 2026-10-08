@@ -14,6 +14,15 @@ import { acceptInvitation, cancelInvitation, createInvitation } from "./lib/invi
 import { changeMemberRole, listMembers, removeMember, updateMemberPermissions, type SpaceMember } from "./lib/members";
 
 const today = () => new Date().toISOString().slice(0, 10);
+const timestampValue = (value: unknown): number => {
+  if (value && typeof value === "object") {
+    const item = value as { toMillis?: () => number; toDate?: () => Date };
+    if (typeof item.toMillis === "function") return item.toMillis();
+    if (typeof item.toDate === "function") return item.toDate().getTime();
+  }
+  if (typeof value === "string") return Date.parse(value) || 0;
+  return 0;
+};
 const money = (value: number, currency: Currency) =>
   new Intl.NumberFormat(currency === "TRY" ? "tr-TR" : "en-US", { maximumFractionDigits: 2 }).format(value) +
   (currency === "TRY" ? " ₺" : " $");
@@ -37,6 +46,7 @@ export function App() {
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [archivedMerchants, setArchivedMerchants] = useState<Merchant[]>([]);
   const [merchantTab, setMerchantTab] = useState<"active" | "archived">("active");
+  const [merchantSort, setMerchantSort] = useState<"newest" | "oldest" | "name">("newest");
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [language, setLanguage] = useState<Language>(() => {
@@ -203,16 +213,22 @@ export function App() {
     const source = merchantTab === "active" ? merchants : archivedMerchants;
     const q = merchantSearch.trim().toLowerCase();
     const filtered = q ? source.filter(m => m.name.toLowerCase().includes(q)) : source;
+    const sorted = [...filtered].sort((a, b) => {
+      if (merchantSort === "name") return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      const aTime = timestampValue(a.createdAt);
+      const bTime = timestampValue(b.createdAt);
+      return merchantSort === "oldest" ? aTime - bTime : bTime - aTime;
+    });
     const counts = new Map<string, number>();
     const seen = new Map<string, number>();
-    for (const merchant of filtered) counts.set(merchant.name, (counts.get(merchant.name) ?? 0) + 1);
-    return filtered.map(merchant => {
+    for (const merchant of sorted) counts.set(merchant.name, (counts.get(merchant.name) ?? 0) + 1);
+    return sorted.map(merchant => {
       const total = counts.get(merchant.name) ?? 1;
       const index = (seen.get(merchant.name) ?? 0) + 1;
       seen.set(merchant.name, index);
       return { merchant, displayName: total > 1 ? String(index) + " " + merchant.name : merchant.name };
     });
-  }, [merchantTab, merchants, archivedMerchants, merchantSearch]);
+  }, [merchantTab, merchants, archivedMerchants, merchantSearch, merchantSort]);
 
   function selectMaterial(name: string) {
     setMaterialName(name);
@@ -679,7 +695,7 @@ export function App() {
       </div>
     </section>}
     <div className="tabs"><button className={merchantTab === "active" ? "tab active-tab" : "tab"} onClick={() => { setMerchantTab("active"); setMerchantSearch(""); }}>{tr("active")} ({merchants.length})</button><button className={merchantTab === "archived" ? "tab active-tab" : "tab"} onClick={() => { setMerchantTab("archived"); setMerchantSearch(""); }}>{tr("archived")} ({archivedMerchants.length})</button></div>
-    <input className="merchant-search" value={merchantSearch} onChange={e => setMerchantSearch(e.target.value)} placeholder={tr("searchMerchant")} />
+    <input className="merchant-search" value={merchantSearch} onChange={e => setMerchantSearch(e.target.value)} placeholder={tr("searchMerchant")} /><select className="merchant-sort" value={merchantSort} onChange={e => setMerchantSort(e.target.value as "newest" | "oldest" | "name")}><option value="newest">{language === "ar" ? "الأحدث أولاً" : language === "tr" ? "Yeniden eskiye" : "Newest first"}</option><option value="oldest">{language === "ar" ? "الأقدم أولاً" : language === "tr" ? "Eskiden yeniye" : "Oldest first"}</option><option value="name">{language === "ar" ? "الاسم" : language === "tr" ? "Ada göre" : "Name"}</option></select>
     <section className="merchant-list">{visibleMerchants.length === 0 ? <div className="empty">{merchantSearch.trim() ? tr("noSearchResults") : (merchantTab === "active" ? tr("noMerchants") : tr("noArchivedMerchants"))}</div> : visibleMerchants.map(({merchant:m,displayName}) => <article className="merchant-card" key={m.id}><button className="merchant-open" onClick={() => setSelectedMerchant(m)}><h3>{displayName}</h3><span>{m.defaultCurrency === "TRY" ? "₺" : "$"} · {merchantTab === "active" ? tr("activeMerchant") : tr("archivedMerchant")}</span></button><button className="ghost" disabled={busy || !isManager} onClick={() => changeMerchantArchive(m, merchantTab === "archived")}>{merchantTab === "active" ? tr("archive") : tr("restore")}</button></article>)}</section>
   </section></main>;
 }

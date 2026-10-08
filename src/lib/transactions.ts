@@ -158,6 +158,7 @@ export async function createPayment(
   userId: string,
   input: PaymentInput,
 ) {
+  requireOnline();
   if (!db) throw new Error("Firebase is not configured.");
   if (
     !input.paymentMethod.trim() ||

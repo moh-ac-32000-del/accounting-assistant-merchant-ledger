@@ -60,6 +60,11 @@ service cloud.firestore {
         (isManager(workspaceId) || workerPermission(workspaceId, "manageMaterials"));
     }
 
+    function canManageReferencePrices(workspaceId) {
+      return workspaceActive(workspaceId) &&
+        (isManager(workspaceId) || workerPermission(workspaceId, "manageReferencePrices"));
+    }
+
     function canCreateTransactions(workspaceId) {
       return workspaceActive(workspaceId);
     }
@@ -216,8 +221,16 @@ service cloud.firestore {
 
       match /materials/{materialId} {
         allow read: if isMember(workspaceId);
-        allow create, update: if canManageMaterials(workspaceId) &&
+        allow create: if canManageMaterials(workspaceId) &&
           validMaterial(request.resource.data, workspaceId);
+        allow update: if validMaterial(request.resource.data, workspaceId) &&
+          (
+            canManageMaterials(workspaceId) ||
+            (
+              canManageReferencePrices(workspaceId) &&
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(["defaultPrice", "updatedAt"])
+            )
+          );
         allow delete: if workspaceDeletionArmed(workspaceId);
       }
 

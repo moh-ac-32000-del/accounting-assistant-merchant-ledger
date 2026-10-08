@@ -60,6 +60,25 @@ service cloud.firestore {
         get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
     }
 
+    function validDeputyAfter(workspaceId, deputyId) {
+      return deputyId == null ||
+        (
+          existsAfter(/databases/$(database)/documents/memberships/$(workspaceId + "_" + deputyId)) &&
+          getAfter(/databases/$(database)/documents/memberships/$(workspaceId + "_" + deputyId)).data.workspaceId == workspaceId &&
+          getAfter(/databases/$(database)/documents/memberships/$(workspaceId + "_" + deputyId)).data.userId == deputyId &&
+          getAfter(/databases/$(database)/documents/memberships/$(workspaceId + "_" + deputyId)).data.role in ["admin", "member"]
+        );
+    }
+
+    function validOwnershipTransfer(workspaceId) {
+      return request.resource.data.ownerId != resource.data.ownerId &&
+        request.resource.data.ownerId != request.auth.uid &&
+        existsAfter(/databases/$(database)/documents/memberships/$(workspaceId + "_" + request.resource.data.ownerId)) &&
+        getAfter(/databases/$(database)/documents/memberships/$(workspaceId + "_" + request.resource.data.ownerId)).data.userId == request.resource.data.ownerId &&
+        getAfter(/databases/$(database)/documents/memberships/$(workspaceId + "_" + request.resource.data.ownerId)).data.role == "owner" &&
+        getAfter(/databases/$(database)/documents/memberships/$(workspaceId + "_" + request.auth.uid)).data.role == "admin";
+    }
+
     function validCurrency(value) {
       return value in ["TRY", "USD"];
     }
@@ -133,7 +152,12 @@ service cloud.firestore {
       allow read: if isMember(workspaceId);
       allow create: if signedIn() &&
         request.resource.data.ownerId == request.auth.uid;
-      allow update: if isOwner(workspaceId);
+      allow update: if isOwner(workspaceId) &&
+        validDeputyAfter(workspaceId, request.resource.data.deputyId) &&
+        (
+          request.resource.data.ownerId == resource.data.ownerId ||
+          validOwnershipTransfer(workspaceId)
+        );
       allow delete: if false;
 
       match /merchants/{merchantId} {
@@ -246,7 +270,15 @@ service cloud.firestore {
         isOwner(resource.data.workspaceId) &&
         request.resource.data.workspaceId == resource.data.workspaceId &&
         request.resource.data.userId == resource.data.userId &&
-        request.resource.data.role in ["admin", "member"] &&
+        (
+          request.resource.data.role in ["admin", "member"] ||
+          (
+            request.resource.data.role == "owner" &&
+            request.resource.data.userId != request.auth.uid &&
+            getAfter(/databases/$(database)/documents/workspaces/$(resource.data.workspaceId)).data.ownerId == request.resource.data.userId &&
+            getAfter(/databases/$(database)/documents/memberships/$(resource.data.workspaceId + "_" + request.auth.uid)).data.role == "admin"
+          )
+        ) &&
         (!("permissions" in request.resource.data) || validWorkerPermissions(request.resource.data.permissions));
       allow delete: if signedIn() &&
         isOwner(resource.data.workspaceId) &&

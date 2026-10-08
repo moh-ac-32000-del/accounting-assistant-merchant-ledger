@@ -40,6 +40,8 @@ export async function createWorkspace(userId: string, name: string): Promise<Wor
     ownerId: userId,
     archived: false,
     merchantArchiveDays: 90,
+    ownerInactivityDays: 0,
+    ownerLastActiveAt: serverTimestamp(),
     defaultCurrency: "TRY",
     paymentMethods: [{ id: "cash", name: "Cash", active: true }],
     workerPermissions: {
@@ -233,4 +235,58 @@ export async function permanentlyDeleteWorkspace(workspaceId: string, ownerId: s
   finalBatch.delete(doc(db, "memberships", workspaceId + "_" + ownerId));
   finalBatch.delete(workspaceRef);
   await finalBatch.commit();
+}
+
+
+export async function touchOwnerActivity(workspaceId: string, userId: string) {
+  if (!db) throw new Error("Firebase is not configured.");
+  const workspaceRef = doc(db, "workspaces", workspaceId);
+  const snap = await getDoc(workspaceRef);
+  if (!snap.exists() || (snap.data() as { ownerId?: string }).ownerId !== userId) return;
+  await updateDoc(workspaceRef, { ownerLastActiveAt: serverTimestamp(), updatedAt: serverTimestamp() });
+}
+
+export async function activateDeputyOwnership(workspaceId: string, deputyUserId: string) {
+  if (!db) throw new Error("Firebase is not configured.");
+  const workspaceRef = doc(db, "workspaces", workspaceId);
+  const snap = await getDoc(workspaceRef);
+  if (!snap.exists()) throw new Error("Space not found.");
+  const data = snap.data() as {
+    ownerId?: string;
+    deputyId?: string | null;
+    ownerInactivityDays?: number;
+    ownerLastActiveAt?: { toMillis?: () => number };
+  };
+  if (data.deputyId !== deputyUserId) throw new Error("You are not the configured deputy.");
+  if (!data.ownerInactivityDays || data.ownerInactivityDays <= 0) {
+    throw new Error("Emergency ownership is not configured.");
+  }
+  const lastActive = data.ownerLastActiveAt?.toMillis?.() ?? 0;
+  if (!lastActive || Date.now() - lastActive < data.ownerInactivityDays * 24 * 60 * 60 * 1000) {
+    throw new Error("Owner inactivity period has not elapsed.");
+  }
+
+  const oldOwnerId = data.ownerId;
+  if (!oldOwnerId || oldOwnerId === deputyUserId) throw new Error("Invalid ownership state.");
+  const deputyMembershipRef = doc(db, "memberships", workspaceId + "_" + deputyUserId);
+  const oldOwnerMembershipRef = doc(db, "memberships", workspaceId + "_" + oldOwnerId);
+  const batch = writeBatch(db);
+  batch.update(workspaceRef, {
+    ownerId: deputyUserId,
+    deputyId: null,
+    emergencyOwnershipActivatedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  batch.update(oldOwnerMembershipRef, { role: "admin" });
+  batch.update(deputyMembershipRef, { role: "owner" });
+  batch.set(doc(collection(db, "workspaces", workspaceId, "auditEvents")), {
+    workspaceId,
+    actorId: deputyUserId,
+    action: "ownership_emergency_activated",
+    summary: "تفعيل ملكية الطوارئ بواسطة النائب",
+    before: { ownerId: oldOwnerId },
+    after: { ownerId: deputyUserId },
+    createdAt: serverTimestamp(),
+  });
+  await batch.commit();
 }

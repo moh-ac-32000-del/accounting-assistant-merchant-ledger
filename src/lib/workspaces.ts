@@ -107,7 +107,7 @@ export async function setDeputy(workspaceId: string, deputyUserId: string | null
   batch.update(workspaceRef, { deputyId: deputyUserId, updatedAt: serverTimestamp() });
   batch.set(doc(collection(db, "workspaces", workspaceId, "auditEvents")), {
     workspaceId,
-    actorId: deputyUserId ?? "system",
+    actorId: (workspaceSnap.data() as { ownerId?: string }).ownerId,
     action: "deputy_changed",
     summary: "تغيير نائب المساحة",
     before: null,

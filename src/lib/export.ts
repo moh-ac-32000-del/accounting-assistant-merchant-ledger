@@ -20,8 +20,14 @@ export function exportMerchantStatement(
     purchases: string;
     payments: string;
   },
+  options: { from?: string; to?: string; currency?: Currency | "ALL" } = {},
 ) {
-  const rows = transactions.map(transaction => ({
+  const filtered = transactions.filter(transaction =>
+    (!options.from || transaction.date >= options.from) &&
+    (!options.to || transaction.date <= options.to) &&
+    (!options.currency || options.currency === "ALL" || transaction.currency === options.currency)
+  );
+  const rows = filtered.map(transaction => ({
     [labels.date]: transaction.date,
     [labels.type]: transaction.type === "purchase" ? labels.purchase : labels.payment,
     [labels.material]: transaction.type === "purchase"
@@ -39,10 +45,10 @@ export function exportMerchantStatement(
   XLSX.utils.book_append_sheet(workbook, sheet, "Transactions");
 
   const balances = (["TRY", "USD"] as Currency[]).map(currency => {
-    const purchases = transactions
+    const purchases = filtered
       .filter(t => t.currency === currency && t.type === "purchase")
       .reduce((sum, t) => sum + (t.total ?? 0), 0);
-    const payments = transactions
+    const payments = filtered
       .filter(t => t.currency === currency && t.type === "payment")
       .reduce((sum, t) => sum + (t.amount ?? 0), 0);
     return [currency, purchases, payments, purchases - payments];
@@ -53,6 +59,8 @@ export function exportMerchantStatement(
     [],
     [labels.currency, labels.purchases, labels.payments, labels.balance],
     ...balances,
+    [],
+    [labels.date, options.from || "", options.to || ""],
   ]);
   XLSX.utils.book_append_sheet(workbook, summarySheet, labels.summary.slice(0, 31));
 

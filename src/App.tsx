@@ -24,6 +24,7 @@ export function App() {
   const [workspaces, setWorkspaces] = useState<Array<WorkspaceSummary & { role: WorkspaceRole }>>([]);
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceDefaultCurrency, setWorkspaceDefaultCurrency] = useState<Currency>("TRY");
+  const [merchantArchiveDays, setMerchantArchiveDays] = useState(90);
   const [paymentMethods, setPaymentMethods] = useState<Array<{ id: string; name: string; active: boolean }>>([]);
   const [workerPermissions, setWorkerPermissions] = useState({ editDeleteTransactions: true, manageMaterials: true, manageReferencePrices: true, managePaymentMethods: true, manageMerchants: true });
   const [newPaymentMethod, setNewPaymentMethod] = useState("");
@@ -132,6 +133,7 @@ export function App() {
         setWorkspaceId(selected.id);
         setWorkspaceName(selected.name);
         setWorkspaceDefaultCurrency((selected as any).defaultCurrency === "USD" ? "USD" : "TRY");
+        setMerchantArchiveDays(Number((selected as any).merchantArchiveDays ?? 90));
         setPaymentMethods((selected as any).paymentMethods ?? [{ id: "cash", name: "Cash", active: true }]);
         setWorkerPermissions((selected as any).workerPermissions ?? { editDeleteTransactions: true, manageMaterials: true, manageReferencePrices: true, managePaymentMethods: true, manageMerchants: true });
         setDeputyId((selected as any).deputyId ?? null);
@@ -147,6 +149,7 @@ export function App() {
     if (current) {
       setWorkspaceName(current.name);
       setWorkspaceDefaultCurrency((current as any).defaultCurrency === "USD" ? "USD" : "TRY");
+      setMerchantArchiveDays(Number((current as any).merchantArchiveDays ?? 90));
       setPaymentMethods((current as any).paymentMethods ?? [{ id: "cash", name: "Cash", active: true }]);
     }
     listMembers(workspaceId).then(setMembers).catch(() => undefined);
@@ -159,9 +162,9 @@ export function App() {
   useEffect(() => {
     if (!workspaceId || !user || !merchants.length) return;
     const current = workspaces.find(w => w.id === workspaceId) as any;
-    const days = Number(current?.merchantArchiveDays ?? 90);
+    const days = Number(merchantArchiveDays || current?.merchantArchiveDays || 90);
     autoArchiveInactiveMerchants(workspaceId, merchants, days, user.uid).catch(() => undefined);
-  }, [workspaceId, merchants.length, user?.uid]);
+  }, [workspaceId, merchants.length, merchantArchiveDays, user?.uid]);
 
   useEffect(() => {
     if (!workspaceId || !selectedMerchant) { setTransactions([]); return; }
@@ -404,6 +407,7 @@ export function App() {
       await updateWorkspaceSettings(workspaceId, {
         name: workspaceName.trim(),
         defaultCurrency: workspaceDefaultCurrency,
+        merchantArchiveDays: Math.max(1, Math.floor(merchantArchiveDays)),
         paymentMethods,
         workerPermissions,
       });
@@ -639,6 +643,7 @@ export function App() {
       <div className="section-head"><h2>{ui.spaceSettings}</h2><button className="ghost" onClick={() => setSettingsOpen(false)}>{tr("close")}</button></div>
       <label className="settings-field"><span>{ui.spaceName}</span><input disabled={!isOwner || busy} value={workspaceName} onChange={e => setWorkspaceName(e.target.value)} /></label>
       <label className="settings-field"><span>{ui.defaultCurrency}</span><select disabled={!isOwner || busy} value={workspaceDefaultCurrency} onChange={e => setWorkspaceDefaultCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select></label>
+      <label className="settings-field"><span>{language === "ar" ? "مدة أرشفة التاجر (أيام)" : language === "tr" ? "Tüccar arşiv süresi (gün)" : "Merchant archive duration (days)"}</span><input type="number" min="1" step="1" disabled={!isOwner || busy || workspaceArchived} value={merchantArchiveDays} onChange={e => setMerchantArchiveDays(Math.max(1, Number(e.target.value) || 1))} /></label>
       <h3>{ui.paymentMethods}</h3>
       <h3>{language === "ar" ? "الأعضاء" : language === "tr" ? "Üyeler" : "Members"}</h3>
       <div className="settings-materials">{members.map(member => {

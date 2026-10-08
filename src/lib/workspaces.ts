@@ -60,5 +60,41 @@ export async function transferOwnership(workspaceId: string, currentOwnerId: str
 
 export async function setDeputy(workspaceId: string, deputyUserId: string | null) {
   if (!db) throw new Error("Firebase is not configured.");
-  await updateDoc(doc(db, "workspaces", workspaceId), { deputyId: deputyUserId, updatedAt: serverTimestamp() });
+  const workspaceRef = doc(db, "workspaces", workspaceId);
+  const workspaceSnap = await getDoc(workspaceRef);
+  if (!workspaceSnap.exists()) throw new Error("Space not found.");
+  if (deputyUserId) {
+    const membershipSnap = await getDoc(doc(db, "memberships", workspaceId + "_" + deputyUserId));
+    if (!membershipSnap.exists()) throw new Error("Deputy must be an existing member.");
+    const role = (membershipSnap.data() as { role?: string }).role;
+    if (role === "owner") throw new Error("Owner cannot be deputy.");
+  }
+  await updateDoc(workspaceRef, { deputyId: deputyUserId, updatedAt: serverTimestamp() });
+}
+
+export async function archiveWorkspace(workspaceId: string) {
+  if (!db) throw new Error("Firebase is not configured.");
+  await updateDoc(doc(db, "workspaces", workspaceId), {
+    archived: true,
+    archivedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function restoreWorkspace(workspaceId: string) {
+  if (!db) throw new Error("Firebase is not configured.");
+  await updateDoc(doc(db, "workspaces", workspaceId), {
+    archived: false,
+    archivedAt: null,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function leaveWorkspace(workspaceId: string, userId: string, role: WorkspaceRole) {
+  if (!db) throw new Error("Firebase is not configured.");
+  if (role === "owner") throw new Error("Owner must transfer ownership before leaving.");
+  const membershipRef = doc(db, "memberships", workspaceId + "_" + userId);
+  const membershipSnap = await getDoc(membershipRef);
+  if (!membershipSnap.exists()) throw new Error("Membership not found.");
+  await deleteDoc(membershipRef);
 }

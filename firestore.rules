@@ -24,6 +24,12 @@ service cloud.firestore {
         get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.archived != true;
     }
 
+    function workspaceDeletionArmed(workspaceId) {
+      return isOwner(workspaceId) &&
+        get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.archived == true &&
+        get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.deletionArmed == true;
+    }
+
     function workerPermission(workspaceId, permission) {
       return isMember(workspaceId) &&
         membership(workspaceId).data.role == "member" &&
@@ -167,7 +173,7 @@ service cloud.firestore {
           request.resource.data.ownerId == resource.data.ownerId ||
           validOwnershipTransfer(workspaceId)
         );
-      allow delete: if false;
+      allow delete: if workspaceDeletionArmed(workspaceId);
 
       match /merchants/{merchantId} {
         allow read: if isMember(workspaceId);
@@ -185,7 +191,7 @@ service cloud.firestore {
               canManageMerchants(workspaceId)
             )
           );
-        allow delete: if false;
+        allow delete: if workspaceDeletionArmed(workspaceId);
 
         match /transactions/{transactionId} {
           allow read: if isMember(workspaceId);
@@ -204,7 +210,7 @@ service cloud.firestore {
               validPurchase(request.resource.data, workspaceId, merchantId) ||
               validPayment(request.resource.data, workspaceId, merchantId)
             );
-          allow delete: if false;
+          allow delete: if workspaceDeletionArmed(workspaceId);
         }
       }
 
@@ -212,7 +218,7 @@ service cloud.firestore {
         allow read: if isMember(workspaceId);
         allow create, update: if canManageMaterials(workspaceId) &&
           validMaterial(request.resource.data, workspaceId);
-        allow delete: if false;
+        allow delete: if workspaceDeletionArmed(workspaceId);
       }
 
       match /auditEvents/{eventId} {
@@ -228,7 +234,8 @@ service cloud.firestore {
                 ? canEditTransactions(workspaceId)
                 : canManageMerchants(workspaceId)
           );
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if workspaceDeletionArmed(resource.data.workspaceId);
       }
     }
 
@@ -255,7 +262,9 @@ service cloud.firestore {
             resource.data.expiresAt > request.time
           )
         );
-      allow delete: if false;
+      allow delete: if isOwner(resource.data.workspaceId) &&
+        resource.data.workspaceId is string &&
+        get(/databases/$(database)/documents/workspaces/$(resource.data.workspaceId)).data.deletionArmed == true;
     }
 
     match /memberships/{membershipId} {
@@ -301,6 +310,7 @@ service cloud.firestore {
         (!("permissions" in request.resource.data) || validWorkerPermissions(request.resource.data.permissions));
       allow delete: if signedIn() &&
         (
+          workspaceDeletionArmed(resource.data.workspaceId) ||
           (
             isOwner(resource.data.workspaceId) &&
             resource.data.userId != request.auth.uid

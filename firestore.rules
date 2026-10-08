@@ -164,9 +164,18 @@ service cloud.firestore {
         allow read: if isMember(workspaceId);
         allow create: if canManageMerchants(workspaceId) &&
           validMerchant(request.resource.data, workspaceId);
-        allow update: if canManageMerchants(workspaceId) &&
-          resource.data.workspaceId == workspaceId &&
-          validMerchant(request.resource.data, workspaceId);
+        allow update: if resource.data.workspaceId == workspaceId &&
+          validMerchant(request.resource.data, workspaceId) &&
+          (
+            (
+              resource.data.status == "archived" &&
+              request.resource.data.status == "active" &&
+              isMember(workspaceId)
+            ) ||
+            (
+              canManageMerchants(workspaceId)
+            )
+          );
         allow delete: if false;
 
         match /transactions/{transactionId} {

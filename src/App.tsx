@@ -48,6 +48,10 @@ export function App() {
   const isOwner = currentWorkspace?.role === "owner";
   const isManager = currentWorkspace?.role === "owner" || currentWorkspace?.role === "admin";
   const workspaceArchived = currentWorkspace?.archived === true;
+  const currentMember = members.find(member => member.userId === user?.uid);
+  const currentWorkerPermissions = currentMember?.permissions ?? workerPermissions;
+  const canManageMaterials = isManager || currentWorkerPermissions.manageMaterials;
+  const canManageReferencePrices = isManager || currentWorkerPermissions.manageReferencePrices;
   const ui = language === "ar" ? { createSpace: "إنشاء مساحة", createSpaceTitle: "أنشئ مساحتك", createSpaceDescription: "أدخل اسم المساحة ثم ابدأ العمل.", spaceName: "اسم المساحة", settings: "الإعدادات", spaceSettings: "إعدادات المساحة", defaultCurrency: "العملة الافتراضية", paymentMethods: "طرق الدفع", newPaymentMethod: "طريقة دفع جديدة" } : language === "tr" ? { createSpace: "Alan oluştur", createSpaceTitle: "Alanınızı oluşturun", createSpaceDescription: "Alan adını girin ve çalışmaya başlayın.", spaceName: "Alan adı", settings: "Ayarlar", spaceSettings: "Alan ayarları", defaultCurrency: "Varsayılan para birimi", paymentMethods: "Ödeme yöntemleri", newPaymentMethod: "Yeni ödeme yöntemi" } : { createSpace: "Create Space", createSpaceTitle: "Create your Space", createSpaceDescription: "Enter a Space name to get started.", spaceName: "Space name", settings: "Settings", spaceSettings: "Space settings", defaultCurrency: "Default currency", paymentMethods: "Payment methods", newPaymentMethod: "New payment method" };
   const [materials, setMaterials] = useState<Material[]>([]);
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null);
@@ -637,7 +641,7 @@ export function App() {
       <input value={materialName} onChange={e => setMaterialName(e.target.value)} placeholder={tr("materialName")} />
       <input type="number" step="any" value={materialPrice} onChange={e => setMaterialPrice(e.target.value)} placeholder={tr("price")} />
       <select value={materialCurrency} onChange={e => setMaterialCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select>
-      <button className="primary" disabled={busy || !materialName.trim()} onClick={addMaterial}>{tr("addMaterial")}</button>
+      <button className="primary" disabled={busy || !canManageMaterials || workspaceArchived || !materialName.trim()} onClick={addMaterial}>{tr("addMaterial")}</button>
     </div></section>}
     {settingsOpen && <section className="settings-panel">
       <div className="section-head"><h2>{ui.spaceSettings}</h2><button className="ghost" onClick={() => setSettingsOpen(false)}>{tr("close")}</button></div>
@@ -666,7 +670,7 @@ export function App() {
       <div className="form-row"><input disabled={!isOwner || busy} value={newPaymentMethod} onChange={e => setNewPaymentMethod(e.target.value)} placeholder={ui.newPaymentMethod} /><button className="primary" disabled={!isOwner || busy} onClick={addPaymentMethodSetting}>{tr("add")}</button></div>
       <h3>{tr("materials")}</h3>
       <div className="form-row"><input value={materialName} onChange={e => setMaterialName(e.target.value)} placeholder={tr("materialName")} /><input type="number" step="any" value={materialPrice} onChange={e => setMaterialPrice(e.target.value)} placeholder={tr("price")} /><select value={materialCurrency} onChange={e => setMaterialCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select><button className="primary" disabled={busy || !materialName.trim()} onClick={addMaterial}>{tr("addMaterial")}</button></div>
-      <div className="settings-materials">{materials.map(m => <div key={m.id}><strong>{m.name}</strong> · {editingMaterialId === m.id ? <input type="number" step="any" value={editingMaterialPrice} onChange={e => setEditingMaterialPrice(e.target.value)} /> : <span>{m.defaultPrice} {m.currency}</span>} <button className="ghost small" onClick={() => { if (editingMaterialId === m.id) saveMaterialPrice(m); else { setEditingMaterialId(m.id); setEditingMaterialPrice(String(m.defaultPrice)); } }}>{editingMaterialId === m.id ? tr("saveChanges") : tr("edit")}</button></div>)}</div>
+      <div className="settings-materials">{materials.map(m => <div key={m.id}><strong>{m.name}</strong> · {editingMaterialId === m.id ? <input type="number" step="any" value={editingMaterialPrice} onChange={e => setEditingMaterialPrice(e.target.value)} /> : <span>{m.defaultPrice} {m.currency}</span>} <button className="ghost small" disabled={busy || !canManageReferencePrices || workspaceArchived} onClick={() => { if (editingMaterialId === m.id) saveMaterialPrice(m); else { setEditingMaterialId(m.id); setEditingMaterialPrice(String(m.defaultPrice)); } }}>{editingMaterialId === m.id ? tr("saveChanges") : tr("edit")}</button></div>)}</div>
       <div className="form-row">
         <button className="primary" disabled={!isOwner || busy || workspaceArchived} onClick={saveSpaceSettings}>{tr("saveChanges")}</button>
         {isOwner && !workspaceArchived && <button className="ghost danger" disabled={busy} onClick={archiveCurrentWorkspace}>{language === "ar" ? "أرشفة المساحة" : language === "tr" ? "Alanı arşivle" : "Archive Space"}</button>}

@@ -8,7 +8,7 @@ export interface Invitation {
   id: string;
   workspaceId: string;
   role: InvitationRole;
-  createdBy: string;
+  inviterId: string;
   createdAt?: unknown;
   expiresAt?: unknown;
   acceptedAt?: unknown;

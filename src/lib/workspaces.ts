@@ -103,25 +103,60 @@ export async function setDeputy(workspaceId: string, deputyUserId: string | null
     const role = (membershipSnap.data() as { role?: string }).role;
     if (role === "owner") throw new Error("Owner cannot be deputy.");
   }
-  await updateDoc(workspaceRef, { deputyId: deputyUserId, updatedAt: serverTimestamp() });
+  const batch = writeBatch(db);
+  batch.update(workspaceRef, { deputyId: deputyUserId, updatedAt: serverTimestamp() });
+  batch.set(doc(collection(db, "workspaces", workspaceId, "auditEvents")), {
+    workspaceId,
+    actorId: deputyUserId ?? "system",
+    action: "deputy_changed",
+    summary: "تغيير نائب المساحة",
+    before: null,
+    after: { deputyId: deputyUserId },
+    createdAt: serverTimestamp(),
+  });
+  await batch.commit();
 }
 
 export async function archiveWorkspace(workspaceId: string) {
   if (!db) throw new Error("Firebase is not configured.");
-  await updateDoc(doc(db, "workspaces", workspaceId), {
+  const batch = writeBatch(db);
+  batch.update(doc(db, "workspaces", workspaceId), {
     archived: true,
     archivedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+  batch.set(doc(collection(db, "workspaces", workspaceId, "auditEvents")), {
+    workspaceId,
+    actorId: (await getDoc(doc(db, "workspaces", workspaceId))).data()?.ownerId,
+    action: "space_archived",
+    summary: "أرشفة المساحة",
+    before: { archived: false },
+    after: { archived: true },
+    createdAt: serverTimestamp(),
+  });
+  await batch.commit();
 }
 
 export async function restoreWorkspace(workspaceId: string) {
   if (!db) throw new Error("Firebase is not configured.");
-  await updateDoc(doc(db, "workspaces", workspaceId), {
+  const workspaceRef = doc(db, "workspaces", workspaceId);
+  const snap = await getDoc(workspaceRef);
+  const batch = writeBatch(db);
+  batch.update(workspaceRef, {
     archived: false,
     archivedAt: null,
     updatedAt: serverTimestamp(),
   });
+  batch.set(doc(collection(db, "workspaces", workspaceId, "auditEvents")), {
+    workspaceId,
+    actorId: snap.data()?.ownerId,
+    action: "space_restored",
+    summary: "استعادة المساحة",
+    before: { archived: true },
+    after: { archived: false },
+    createdAt: serverTimestamp(),
+  });
+  await batch.commit();
 }
 
 export async function leaveWorkspace(workspaceId: string, userId: string, role: WorkspaceRole) {

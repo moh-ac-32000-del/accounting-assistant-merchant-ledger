@@ -19,6 +19,11 @@ service cloud.firestore {
         membership(workspaceId).data.role in ["owner", "admin"];
     }
 
+    function workspaceActive(workspaceId) {
+      return isMember(workspaceId) &&
+        get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.archived != true;
+    }
+
     function workerPermission(workspaceId, permission) {
       return isMember(workspaceId) &&
         membership(workspaceId).data.role == "member" &&
@@ -40,19 +45,22 @@ service cloud.firestore {
     }
 
     function canManageMerchants(workspaceId) {
-      return isManager(workspaceId) || workerPermission(workspaceId, "manageMerchants");
+      return workspaceActive(workspaceId) &&
+        (isManager(workspaceId) || workerPermission(workspaceId, "manageMerchants"));
     }
 
     function canManageMaterials(workspaceId) {
-      return isManager(workspaceId) || workerPermission(workspaceId, "manageMaterials");
+      return workspaceActive(workspaceId) &&
+        (isManager(workspaceId) || workerPermission(workspaceId, "manageMaterials"));
     }
 
     function canCreateTransactions(workspaceId) {
-      return isMember(workspaceId);
+      return workspaceActive(workspaceId);
     }
 
     function canEditTransactions(workspaceId) {
-      return isManager(workspaceId) || workerPermission(workspaceId, "editDeleteTransactions");
+      return workspaceActive(workspaceId) &&
+        (isManager(workspaceId) || workerPermission(workspaceId, "editDeleteTransactions"));
     }
 
     function isOwner(workspaceId) {
@@ -153,6 +161,7 @@ service cloud.firestore {
       allow create: if signedIn() &&
         request.resource.data.ownerId == request.auth.uid;
       allow update: if isOwner(workspaceId) &&
+        request.resource.data.archived is bool &&
         validDeputyAfter(workspaceId, request.resource.data.deputyId) &&
         (
           request.resource.data.ownerId == resource.data.ownerId ||
@@ -226,6 +235,7 @@ service cloud.firestore {
     match /invitations/{invitationId} {
       allow read: if signedIn();
       allow create: if isManager(request.resource.data.workspaceId) &&
+        workspaceActive(request.resource.data.workspaceId) &&
         request.resource.data.inviterId == request.auth.uid &&
         validInvitation(request.resource.data);
       allow update: if signedIn() &&
@@ -290,8 +300,16 @@ service cloud.firestore {
         ) &&
         (!("permissions" in request.resource.data) || validWorkerPermissions(request.resource.data.permissions));
       allow delete: if signedIn() &&
-        isOwner(resource.data.workspaceId) &&
-        resource.data.userId != request.auth.uid;
+        (
+          (
+            isOwner(resource.data.workspaceId) &&
+            resource.data.userId != request.auth.uid
+          ) ||
+          (
+            resource.data.userId == request.auth.uid &&
+            resource.data.role in ["admin", "member"]
+          )
+        );
     }
   }
 }

@@ -98,6 +98,25 @@ service cloud.firestore {
         getAfter(/databases/$(database)/documents/memberships/$(workspaceId + "_" + request.auth.uid)).data.role == "admin";
     }
 
+    function validEmergencyOwnership(workspaceId) {
+      return signedIn() &&
+        get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.deputyId == request.auth.uid &&
+        get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerInactivityDays is number &&
+        get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerInactivityDays > 0 &&
+        get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerLastActiveAt is timestamp &&
+        request.time >= get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerLastActiveAt +
+          duration.value(get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerInactivityDays, "d") &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.deputyId == null &&
+        getAfter(/databases/$(database)/documents/memberships/$(workspaceId + "_" + request.auth.uid)).data.role == "owner" &&
+        getAfter(/databases/$(database)/documents/memberships/$(workspaceId + "_" + get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId)).data.role == "admin";
+    }
+
+    function isCurrentDeputy(workspaceId) {
+      return isMember(workspaceId) &&
+        get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.deputyId == request.auth.uid;
+    }
+
     function validCurrency(value) {
       return value in ["TRY", "USD"];
     }
@@ -171,13 +190,15 @@ service cloud.firestore {
       allow read: if isMember(workspaceId);
       allow create: if signedIn() &&
         request.resource.data.ownerId == request.auth.uid;
-      allow update: if isOwner(workspaceId) &&
+      allow update: if (
+        isOwner(workspaceId) &&
         request.resource.data.archived is bool &&
         validDeputyAfter(workspaceId, request.resource.data.deputyId) &&
         (
           request.resource.data.ownerId == resource.data.ownerId ||
           validOwnershipTransfer(workspaceId)
-        );
+        )
+      ) || validEmergencyOwnership(workspaceId);
       allow delete: if workspaceDeletionArmed(workspaceId);
 
       match /merchants/{merchantId} {
@@ -241,7 +262,7 @@ service cloud.firestore {
           request.resource.data.actorId == request.auth.uid &&
           request.resource.data.action in [
             "created", "updated", "deleted", "archived", "restored",
-            "ownership_transferred", "deputy_changed",
+            "ownership_transferred", "ownership_emergency_activated", "deputy_changed",
             "space_archived", "space_restored", "space_deleted"
           ] &&
           (
@@ -251,6 +272,9 @@ service cloud.firestore {
                 ? canEditTransactions(workspaceId)
                 : request.resource.data.action in ["ownership_transferred", "deputy_changed", "space_archived", "space_restored", "space_deleted"]
                   ? isOwner(workspaceId)
+                  : request.resource.data.action == "ownership_emergency_activated"
+                    ? isCurrentDeputy(workspaceId)
+                    : canManageMerchants(workspaceId)
                   : canManageMerchants(workspaceId)
           );
         allow update: if false;

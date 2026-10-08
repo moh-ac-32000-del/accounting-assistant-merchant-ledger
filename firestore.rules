@@ -239,13 +239,19 @@ service cloud.firestore {
         allow create: if isMember(workspaceId) &&
           request.resource.data.workspaceId == workspaceId &&
           request.resource.data.actorId == request.auth.uid &&
-          request.resource.data.action in ["created", "updated", "deleted", "archived", "restored"] &&
+          request.resource.data.action in [
+            "created", "updated", "deleted", "archived", "restored",
+            "ownership_transferred", "deputy_changed",
+            "space_archived", "space_restored", "space_deleted"
+          ] &&
           (
             request.resource.data.action == "created"
               ? canCreateTransactions(workspaceId)
               : request.resource.data.action == "updated" || request.resource.data.action == "deleted"
                 ? canEditTransactions(workspaceId)
-                : canManageMerchants(workspaceId)
+                : request.resource.data.action in ["ownership_transferred", "deputy_changed", "space_archived", "space_restored", "space_deleted"]
+                  ? isOwner(workspaceId)
+                  : canManageMerchants(workspaceId)
           );
         allow update: if false;
         allow delete: if workspaceDeletionArmed(resource.data.workspaceId);

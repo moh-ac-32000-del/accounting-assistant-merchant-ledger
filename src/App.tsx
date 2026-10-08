@@ -527,7 +527,7 @@ export function App() {
     setBusy(true); setError("");
     try {
       await createPurchase(workspaceId, selectedMerchant.id, user.uid, { date, currency: transactionCurrency, materialNameSnapshot: materialName, quantity: q, unitPrice: p, note });
-      setQuantity(""); setUnitPrice(""); setNote(""); setTransactionCurrency(workspaceDefaultCurrency);
+      setQuantity(""); setUnitPrice(""); setNote(""); setDate(today()); setTransactionCurrency(workspaceDefaultCurrency);
     } catch (e) { setError(tr("transactionError")); }
     finally { setBusy(false); }
   }
@@ -539,7 +539,7 @@ export function App() {
     setBusy(true); setError("");
     try {
       await createPayment(workspaceId, selectedMerchant.id, user.uid, { date, currency: transactionCurrency, paymentMethod, amount, note });
-      setPaymentAmount(""); setNote(""); setTransactionCurrency(workspaceDefaultCurrency);
+      setPaymentAmount(""); setNote(""); setDate(today()); setTransactionCurrency(workspaceDefaultCurrency);
     } catch (e) { setError(tr("transactionError")); }
     finally { setBusy(false); }
   }

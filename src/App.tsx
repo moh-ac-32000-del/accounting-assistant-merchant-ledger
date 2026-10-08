@@ -3,7 +3,7 @@ import type { User } from "firebase/auth";
 import { signInWithGoogle, signOutUser, subscribeToAuth } from "./lib/auth";
 import { firebaseConfigured } from "./lib/firebase";
 import { archiveMerchant, createMerchant, restoreMerchant, subscribeToArchivedMerchants, subscribeToMerchants, autoArchiveInactiveMerchants } from "./lib/merchants";
-import { getOrCreateWorkspace, listUserWorkspaces, createWorkspace, updateWorkspaceSettings, setDeputy, archiveWorkspace, restoreWorkspace, leaveWorkspace, transferOwnership, type WorkspaceSummary, type WorkspaceRole } from "./lib/workspaces";
+import { getOrCreateWorkspace, listUserWorkspaces, createWorkspace, updateWorkspaceSettings, setDeputy, archiveWorkspace, restoreWorkspace, permanentlyDeleteWorkspace, leaveWorkspace, transferOwnership, type WorkspaceSummary, type WorkspaceRole } from "./lib/workspaces";
 import { createPayment, createPurchase, deleteTransaction, subscribeToAuditEvents, subscribeToTransactions, updateTransaction } from "./lib/transactions";
 import { createMaterial, subscribeToMaterials, updateMaterial } from "./lib/materials";
 import type { AuditEvent, Currency, Material, Merchant, Transaction } from "./lib/types";
@@ -322,6 +322,36 @@ export function App() {
     }
   }
 
+  async function permanentlyDeleteCurrentWorkspace() {
+    if (!workspaceId || !user || !isOwner || !workspaceArchived) return;
+    const first = window.confirm(language === "ar"
+      ? "تحذير: سيتم حذف هذه المساحة وبياناتها نهائيًا. هل تريد المتابعة؟"
+      : language === "tr"
+        ? "Uyarı: Bu alan ve verileri kalıcı olarak silinecek. Devam etmek istiyor musunuz?"
+        : "Warning: this Space and its data will be permanently deleted. Continue?");
+    if (!first) return;
+    const second = window.confirm(language === "ar"
+      ? "تأكيد نهائي: لا يمكن التراجع عن الحذف. اضغط موافق للحذف النهائي."
+      : language === "tr"
+        ? "Son onay: Silme işlemi geri alınamaz. Kalıcı silmek için Tamam'a basın."
+        : "Final confirmation: deletion cannot be undone. Press OK to permanently delete.");
+    if (!second) return;
+
+    setBusy(true); setError("");
+    try {
+      await permanentlyDeleteWorkspace(workspaceId, user.uid);
+      const spaces = await listUserWorkspaces(user.uid);
+      setWorkspaces(spaces);
+      setSelectedMerchant(null);
+      setSettingsOpen(false);
+      setWorkspaceId(spaces[0]?.id ?? null);
+    } catch {
+      setError(tr("merchantError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function restoreCurrentWorkspace() {
     if (!workspaceId || !isOwner) return;
     setBusy(true); setError("");
@@ -633,7 +663,7 @@ export function App() {
       <div className="form-row">
         <button className="primary" disabled={!isOwner || busy || workspaceArchived} onClick={saveSpaceSettings}>{tr("saveChanges")}</button>
         {isOwner && !workspaceArchived && <button className="ghost danger" disabled={busy} onClick={archiveCurrentWorkspace}>{language === "ar" ? "أرشفة المساحة" : language === "tr" ? "Alanı arşivle" : "Archive Space"}</button>}
-        {isOwner && workspaceArchived && <button className="primary" disabled={busy} onClick={restoreCurrentWorkspace}>{language === "ar" ? "استعادة المساحة" : language === "tr" ? "Alanı geri yükle" : "Restore Space"}</button>}
+        {isOwner && workspaceArchived && <><button className="primary" disabled={busy} onClick={restoreCurrentWorkspace}>{language === "ar" ? "استعادة المساحة" : language === "tr" ? "Alanı geri yükle" : "Restore Space"}</button><button className="ghost danger" disabled={busy} onClick={permanentlyDeleteCurrentWorkspace}>{language === "ar" ? "حذف المساحة نهائيًا" : language === "tr" ? "Alanı kalıcı sil" : "Permanently delete Space"}</button></>}
         {!isOwner && <button className="ghost danger" disabled={busy} onClick={leaveCurrentWorkspace}>{language === "ar" ? "مغادرة المساحة" : language === "tr" ? "Alandan ayrıl" : "Leave Space"}</button>}
       </div>
     </section>}

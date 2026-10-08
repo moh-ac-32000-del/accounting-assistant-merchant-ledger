@@ -129,3 +129,73 @@ export async function leaveWorkspace(workspaceId: string, userId: string, role: 
   if (role === "owner") throw new Error("Owner must transfer ownership before leaving.");
   await deleteDoc(doc(db, "memberships", workspaceId + "_" + userId));
 }
+
+
+async function deleteInChunks(refs: Array<ReturnType<typeof doc>>) {
+  if (!db || refs.length === 0) return;
+  for (let i = 0; i < refs.length; i += 450) {
+    const batch = writeBatch(db);
+    refs.slice(i, i + 450).forEach(ref => batch.delete(ref));
+    await batch.commit();
+  }
+}
+
+export async function permanentlyDeleteWorkspace(workspaceId: string, ownerId: string) {
+  if (!db) throw new Error("Firebase is not configured.");
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    throw new Error("لا يمكن حذف المساحة دون اتصال بالإنترنت.");
+  }
+
+  const workspaceRef = doc(db, "workspaces", workspaceId);
+  const workspaceSnap = await getDoc(workspaceRef);
+  if (!workspaceSnap.exists()) throw new Error("Space not found.");
+  const workspace = workspaceSnap.data() as { ownerId?: string; archived?: boolean };
+  if (workspace.ownerId !== ownerId) throw new Error("Only the Owner can permanently delete a Space.");
+  if (workspace.archived !== true) throw new Error("Archive the Space before permanent deletion.");
+
+  await updateDoc(workspaceRef, {
+    archived: true,
+    deletionArmed: true,
+    updatedAt: serverTimestamp(),
+  });
+
+  const membershipSnap = await getDocs(query(
+    collection(db, "memberships"),
+    where("workspaceId", "==", workspaceId),
+  ));
+  const invitationSnap = await getDocs(query(
+    collection(db, "invitations"),
+    where("workspaceId", "==", workspaceId),
+  ));
+  const materialsSnap = await getDocs(collection(db, "workspaces", workspaceId, "materials"));
+  const auditSnap = await getDocs(collection(db, "workspaces", workspaceId, "auditEvents"));
+  const merchantsSnap = await getDocs(collection(db, "workspaces", workspaceId, "merchants"));
+
+  const refs: Array<ReturnType<typeof doc>> = [];
+  membershipSnap.docs
+    .filter(d => d.id !== workspaceId + "_" + ownerId)
+    .forEach(d => refs.push(d.ref));
+  invitationSnap.docs.forEach(d => refs.push(d.ref));
+  materialsSnap.docs.forEach(d => refs.push(d.ref));
+  auditSnap.docs.forEach(d => refs.push(d.ref));
+
+  for (const merchant of merchantsSnap.docs) {
+    const transactionsSnap = await getDocs(collection(
+      db,
+      "workspaces",
+      workspaceId,
+      "merchants",
+      merchant.id,
+      "transactions",
+    ));
+    transactionsSnap.docs.forEach(d => refs.push(d.ref));
+    refs.push(merchant.ref);
+  }
+
+  await deleteInChunks(refs);
+
+  const finalBatch = writeBatch(db);
+  finalBatch.delete(doc(db, "memberships", workspaceId + "_" + ownerId));
+  finalBatch.delete(workspaceRef);
+  await finalBatch.commit();
+}

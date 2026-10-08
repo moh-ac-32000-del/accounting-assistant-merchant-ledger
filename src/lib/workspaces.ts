@@ -1,12 +1,20 @@
 import {
-  addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp,
-  setDoc, updateDoc, where,
+  addDoc, collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp,
+  setDoc, updateDoc, where, writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
 export type WorkspaceRole = "owner" | "admin" | "member";
 export interface WorkspaceContext { workspaceId: string; role: WorkspaceRole; }
-export interface WorkspaceSummary { id: string; name: string; ownerId: string; archived?: boolean; createdAt?: unknown; updatedAt?: unknown; }
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  ownerId: string;
+  archived?: boolean;
+  archivedAt?: unknown;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
 export interface Membership { workspaceId: string; userId: string; role: WorkspaceRole; createdAt?: unknown; }
 
 export async function listUserWorkspaces(userId: string): Promise<Array<WorkspaceSummary & { role: WorkspaceRole }>> {
@@ -28,13 +36,28 @@ export async function createWorkspace(userId: string, name: string): Promise<Wor
   const trimmed = name.trim();
   if (!trimmed) throw new Error("اسم الـSpace مطلوب.");
   const workspaceRef = await addDoc(collection(db, "workspaces"), {
-    name: trimmed, ownerId: userId, archived: false, defaultCurrency: "TRY",
+    name: trimmed,
+    ownerId: userId,
+    archived: false,
     merchantArchiveDays: 90,
+    defaultCurrency: "TRY",
     paymentMethods: [{ id: "cash", name: "Cash", active: true }],
-    workerPermissions: { editDeleteTransactions: true, manageMaterials: true, manageReferencePrices: true, managePaymentMethods: true, manageMerchants: true },
-    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    workerPermissions: {
+      editDeleteTransactions: true,
+      manageMaterials: true,
+      manageReferencePrices: true,
+      managePaymentMethods: true,
+      manageMerchants: true,
+    },
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
-  await setDoc(doc(db, "memberships", workspaceRef.id + "_" + userId), { workspaceId: workspaceRef.id, userId, role: "owner", createdAt: serverTimestamp() });
+  await setDoc(doc(db, "memberships", workspaceRef.id + "_" + userId), {
+    workspaceId: workspaceRef.id,
+    userId,
+    role: "owner",
+    createdAt: serverTimestamp(),
+  });
   return { workspaceId: workspaceRef.id, role: "owner" };
 }
 
@@ -48,21 +71,32 @@ export async function updateWorkspaceSettings(workspaceId: string, patch: Record
   if (!db) throw new Error("Firebase is not configured.");
   await updateDoc(doc(db, "workspaces", workspaceId), { ...patch, updatedAt: serverTimestamp() });
 }
-export async function transferOwnership(workspaceId: string, currentOwnerId: string, newOwnerMembershipId: string, newOwnerUserId: string) {
+
+export async function transferOwnership(
+  workspaceId: string,
+  currentOwnerId: string,
+  newOwnerMembershipId: string,
+  newOwnerUserId: string,
+) {
   if (!db) throw new Error("Firebase is not configured.");
-  const { writeBatch } = await import("firebase/firestore");
+  const newOwnerMembershipRef = doc(db, "memberships", newOwnerMembershipId);
+  const newOwnerSnap = await getDoc(newOwnerMembershipRef);
+  if (!newOwnerSnap.exists()) throw new Error("New owner must be an existing member.");
+  const newOwnerData = newOwnerSnap.data() as { workspaceId?: string; userId?: string; role?: WorkspaceRole };
+  if (newOwnerData.workspaceId !== workspaceId || newOwnerData.userId !== newOwnerUserId || newOwnerData.role === "owner") {
+    throw new Error("Invalid ownership target.");
+  }
+
   const batch = writeBatch(db);
   batch.update(doc(db, "workspaces", workspaceId), { ownerId: newOwnerUserId, updatedAt: serverTimestamp() });
   batch.update(doc(db, "memberships", workspaceId + "_" + currentOwnerId), { role: "admin" });
-  batch.update(doc(db, "memberships", newOwnerMembershipId), { role: "owner" });
+  batch.update(newOwnerMembershipRef, { role: "owner" });
   await batch.commit();
 }
 
 export async function setDeputy(workspaceId: string, deputyUserId: string | null) {
   if (!db) throw new Error("Firebase is not configured.");
   const workspaceRef = doc(db, "workspaces", workspaceId);
-  const workspaceSnap = await getDoc(workspaceRef);
-  if (!workspaceSnap.exists()) throw new Error("Space not found.");
   if (deputyUserId) {
     const membershipSnap = await getDoc(doc(db, "memberships", workspaceId + "_" + deputyUserId));
     if (!membershipSnap.exists()) throw new Error("Deputy must be an existing member.");
@@ -93,8 +127,5 @@ export async function restoreWorkspace(workspaceId: string) {
 export async function leaveWorkspace(workspaceId: string, userId: string, role: WorkspaceRole) {
   if (!db) throw new Error("Firebase is not configured.");
   if (role === "owner") throw new Error("Owner must transfer ownership before leaving.");
-  const membershipRef = doc(db, "memberships", workspaceId + "_" + userId);
-  const membershipSnap = await getDoc(membershipRef);
-  if (!membershipSnap.exists()) throw new Error("Membership not found.");
-  await deleteDoc(membershipRef);
+  await deleteDoc(doc(db, "memberships", workspaceId + "_" + userId));
 }

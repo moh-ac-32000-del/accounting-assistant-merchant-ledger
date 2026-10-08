@@ -3,7 +3,7 @@ import type { User } from "firebase/auth";
 import { signInWithGoogle, signOutUser, subscribeToAuth } from "./lib/auth";
 import { firebaseConfigured } from "./lib/firebase";
 import { archiveMerchant, createMerchant, restoreMerchant, subscribeToArchivedMerchants, subscribeToMerchants, autoArchiveInactiveMerchants } from "./lib/merchants";
-import { getOrCreateWorkspace, listUserWorkspaces, createWorkspace, updateWorkspaceSettings, setDeputy, type WorkspaceSummary, type WorkspaceRole } from "./lib/workspaces";
+import { getOrCreateWorkspace, listUserWorkspaces, createWorkspace, updateWorkspaceSettings, setDeputy, archiveWorkspace, restoreWorkspace, leaveWorkspace, transferOwnership, type WorkspaceSummary, type WorkspaceRole } from "./lib/workspaces";
 import { createPayment, createPurchase, deleteTransaction, subscribeToAuditEvents, subscribeToTransactions, updateTransaction } from "./lib/transactions";
 import { createMaterial, subscribeToMaterials, updateMaterial } from "./lib/materials";
 import type { AuditEvent, Currency, Material, Merchant, Transaction } from "./lib/types";
@@ -45,6 +45,7 @@ export function App() {
   const currentWorkspace = workspaces.find(w => w.id === workspaceId);
   const isOwner = currentWorkspace?.role === "owner";
   const isManager = currentWorkspace?.role === "owner" || currentWorkspace?.role === "admin";
+  const workspaceArchived = currentWorkspace?.archived === true;
   const ui = language === "ar" ? { createSpace: "إنشاء مساحة", createSpaceTitle: "أنشئ مساحتك", createSpaceDescription: "أدخل اسم المساحة ثم ابدأ العمل.", spaceName: "اسم المساحة", settings: "الإعدادات", spaceSettings: "إعدادات المساحة", defaultCurrency: "العملة الافتراضية", paymentMethods: "طرق الدفع", newPaymentMethod: "طريقة دفع جديدة" } : language === "tr" ? { createSpace: "Alan oluştur", createSpaceTitle: "Alanınızı oluşturun", createSpaceDescription: "Alan adını girin ve çalışmaya başlayın.", spaceName: "Alan adı", settings: "Ayarlar", spaceSettings: "Alan ayarları", defaultCurrency: "Varsayılan para birimi", paymentMethods: "Ödeme yöntemleri", newPaymentMethod: "Yeni ödeme yöntemi" } : { createSpace: "Create Space", createSpaceTitle: "Create your Space", createSpaceDescription: "Enter a Space name to get started.", spaceName: "Space name", settings: "Settings", spaceSettings: "Space settings", defaultCurrency: "Default currency", paymentMethods: "Payment methods", newPaymentMethod: "New payment method" };
   const [materials, setMaterials] = useState<Material[]>([]);
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null);
@@ -260,6 +261,26 @@ export function App() {
     }
   }
 
+  async function transferSpaceOwnership(member: SpaceMember) {
+    if (!workspaceId || !user || !isOwner || member.role === "owner") return;
+    if (!window.confirm(language === "ar" ? "نقل ملكية المساحة إلى هذا العضو؟ ستصبح أنت مديرًا." : language === "tr" ? "Alan sahipliği bu üyeye devredilsin mi? Siz yönetici olacaksınız." : "Transfer Space ownership to this member? You will become a Manager.")) return;
+    setBusy(true); setError("");
+    try {
+      await transferOwnership(workspaceId, user.uid, member.id, member.userId);
+      const spaces = await listUserWorkspaces(user.uid);
+      setWorkspaces(spaces);
+      const selected = spaces.find(x => x.id === workspaceId);
+      if (selected) {
+        setWorkspaceName(selected.name);
+        setDeputyId((selected as any).deputyId ?? null);
+      }
+    } catch {
+      setError(tr("merchantError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function kickMember(member: SpaceMember) {
     if (!workspaceId || member.role === "owner") return;
     if (!window.confirm(language === "ar" ? "إزالة هذا العضو من المساحة؟" : language === "tr" ? "Bu üye alandan çıkarılsın mı?" : "Remove this member from the Space?")) return;
@@ -269,6 +290,52 @@ export function App() {
       setMembers(prev => prev.filter(x => x.id !== member.id));
     } catch { setError(tr("merchantError")); }
     finally { setBusy(false); }
+  }
+
+  async function archiveCurrentWorkspace() {
+    if (!workspaceId || !isOwner) return;
+    if (!window.confirm(language === "ar" ? "أرشفة هذه المساحة؟ لن يمكن تسجيل عمليات جديدة حتى استعادتها." : language === "tr" ? "Bu alan arşivlensin mi? Geri yüklenene kadar yeni işlem kaydedilemez." : "Archive this Space? New transactions will be disabled until it is restored.")) return;
+    setBusy(true); setError("");
+    try {
+      await archiveWorkspace(workspaceId);
+      setWorkspaces(prev => prev.map(w => w.id === workspaceId ? { ...w, archived: true } : w));
+      setSelectedMerchant(null);
+    } catch {
+      setError(tr("merchantError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function restoreCurrentWorkspace() {
+    if (!workspaceId || !isOwner) return;
+    setBusy(true); setError("");
+    try {
+      await restoreWorkspace(workspaceId);
+      setWorkspaces(prev => prev.map(w => w.id === workspaceId ? { ...w, archived: false } : w));
+    } catch {
+      setError(tr("merchantError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function leaveCurrentWorkspace() {
+    if (!workspaceId || !user || !currentWorkspace || isOwner) return;
+    if (!window.confirm(language === "ar" ? "مغادرة هذه المساحة؟ ستتم إزالة عضويتك فقط وتبقى بيانات المساحة محفوظة." : language === "tr" ? "Bu alandan ayrılmak istiyor musunuz? Yalnızca üyeliğiniz kaldırılır, veriler korunur." : "Leave this Space? Only your membership will be removed; Space data will remain.")) return;
+    setBusy(true); setError("");
+    try {
+      await leaveWorkspace(workspaceId, user.uid, currentWorkspace.role);
+      const spaces = await listUserWorkspaces(user.uid);
+      setWorkspaces(spaces);
+      setSelectedMerchant(null);
+      setWorkspaceId(spaces[0]?.id ?? null);
+      setSettingsOpen(false);
+    } catch {
+      setError(tr("merchantError"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function makeInvitation() {
@@ -475,7 +542,7 @@ export function App() {
       <input type="date" value={date} onChange={e => setDate(e.target.value)} />
       <select value={transactionCurrency} onChange={e => setTransactionCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select>
       <input value={note} onChange={e => setNote(e.target.value)} placeholder={tr("note")} />
-      <button className="primary" disabled={busy} onClick={addPurchase}>{tr("savePurchase")}</button>
+      <button className="primary" disabled={busy || workspaceArchived} onClick={addPurchase}>{tr("savePurchase")}</button>
     </div></section>
     <section className="add-card"><h2>{tr("addPayment")}</h2><div className="form-grid">
       <input type="number" step="any" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder={tr("amount")} />
@@ -483,7 +550,7 @@ export function App() {
       <input type="date" value={date} onChange={e => setDate(e.target.value)} />
       <select value={transactionCurrency} onChange={e => setTransactionCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select>
       <input value={note} onChange={e => setNote(e.target.value)} placeholder={tr("note")} />
-      <button className="primary" disabled={busy} onClick={addPayment}>{tr("savePayment")}</button>
+      <button className="primary" disabled={busy || workspaceArchived} onClick={addPayment}>{tr("savePayment")}</button>
     </div></section>
     {editingTransaction && <section className="add-card edit-card">
       <div className="section-head"><h2>{tr("editTransaction")}</h2><button className="ghost" onClick={() => setEditingTransaction(null)}>{tr("cancel")}</button></div>
@@ -508,10 +575,11 @@ export function App() {
   return <main className="app-shell"><section className="dashboard">
     <header className="topbar"><div><span className="eyebrow">{tr("merchantLedger")}</span><h1>{tr("merchants")}</h1><select className="space-picker" value={workspaceId ?? ""} onChange={e => setWorkspaceId(e.target.value)}>{workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></div><div className="top-actions"><LanguagePicker language={language} setLanguage={setLanguage} /><details className="menu"><summary className="ghost">⋮</summary><div className="menu-panel"><button className="ghost" onClick={() => setSettingsOpen(true)}>{ui.settings}</button><button className="ghost" onClick={() => { setMerchantTab("archived"); }}>{tr("archived")}</button></div></details><button className="ghost" onClick={() => signOutUser()}>{tr("signOut")}</button></div></header>
     {error && <div className="error">{error}</div>}
+    {workspaceArchived && <div className="error">{language === "ar" ? "هذه المساحة مؤرشفة. استعدها من إعدادات المساحة قبل تسجيل عمليات جديدة." : language === "tr" ? "Bu alan arşivlendi. Yeni işlem kaydetmek için alanı geri yükleyin." : "This Space is archived. Restore it from Space settings before recording new operations."}</div>}
     <section className="add-card"><h2>{tr("addMerchant")}</h2><div className="form-row">
       <input value={merchantName} onChange={e => setMerchantName(e.target.value)} placeholder={tr("merchantName")} onKeyDown={e => e.key === "Enter" && addMerchant()} />
       <select value={merchantCurrency} onChange={e => setMerchantCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select>
-      <button className="primary" disabled={busy || !merchantName.trim()} onClick={addMerchant}>{tr("add")}</button>
+      <button className="primary" disabled={busy || workspaceArchived || !merchantName.trim()} onClick={addMerchant}>{tr("add")}</button>
     </div></section>
     {false && <section className="add-card"><h2>{tr("materials")}</h2><div className="form-row">
       <input value={materialName} onChange={e => setMaterialName(e.target.value)} placeholder={tr("materialName")} />
@@ -529,9 +597,10 @@ export function App() {
         const perms = member.permissions ?? workerPermissions;
         return <div key={member.id}>
           <strong>{member.displayName || member.email || member.userId}</strong> · {member.role === "owner" ? "Owner" : member.role === "admin" ? (language === "ar" ? "مدير" : language === "tr" ? "Yönetici" : "Manager") : (language === "ar" ? "عامل" : language === "tr" ? "Çalışan" : "Worker")}
-          {member.role !== "owner" && <><button className="ghost small" disabled={busy} onClick={() => changeRole(member)}>{member.role === "admin" ? (language === "ar" ? "عامل" : language === "tr" ? "Çalışan" : "Worker") : (language === "ar" ? "مدير" : language === "tr" ? "Yönetici" : "Manager")}</button>
-          <button className="ghost small" disabled={busy} onClick={() => toggleDeputy(member)}>{deputyId === member.userId ? (language === "ar" ? "إزالة النائب" : language === "tr" ? "Vekili kaldır" : "Remove deputy") : (language === "ar" ? "نائب" : language === "tr" ? "Vekil" : "Deputy")}</button>
-          <button className="ghost danger small" disabled={busy} onClick={() => kickMember(member)}>{tr("delete")}</button></>}
+          {member.role !== "owner" && <><button className="ghost small" disabled={busy || workspaceArchived} onClick={() => changeRole(member)}>{member.role === "admin" ? (language === "ar" ? "عامل" : language === "tr" ? "Çalışan" : "Worker") : (language === "ar" ? "مدير" : language === "tr" ? "Yönetici" : "Manager")}</button>
+          {isOwner && <button className="ghost small" disabled={busy || workspaceArchived} onClick={() => transferSpaceOwnership(member)}>{language === "ar" ? "نقل الملكية" : language === "tr" ? "Sahipliği devret" : "Transfer ownership"}</button>}
+          <button className="ghost small" disabled={busy || workspaceArchived} onClick={() => toggleDeputy(member)}>{deputyId === member.userId ? (language === "ar" ? "إزالة النائب" : language === "tr" ? "Vekili kaldır" : "Remove deputy") : (language === "ar" ? "نائب" : language === "tr" ? "Vekil" : "Deputy")}</button>
+          <button className="ghost danger small" disabled={busy || workspaceArchived} onClick={() => kickMember(member)}>{tr("delete")}</button></>}
           {member.role === "member" && <div className="payment-method-list">{Object.entries(perms).map(([key, value]) => <label key={key}><input type="checkbox" checked={value} disabled={workspaces.find(w => w.id === workspaceId)?.role !== "owner" || busy} onChange={() => toggleMemberPermission(member, key as keyof NonNullable<SpaceMember["permissions"]>)} /> {key === "editDeleteTransactions" ? tr("edit") + " / " + tr("delete") : key === "manageMaterials" ? tr("materials") : key === "manageReferencePrices" ? tr("price") : key === "managePaymentMethods" ? ui.paymentMethods : tr("merchants")}</label>)}</div>}
         </div>;
       })}</div>
@@ -545,7 +614,12 @@ export function App() {
       <h3>{tr("materials")}</h3>
       <div className="form-row"><input value={materialName} onChange={e => setMaterialName(e.target.value)} placeholder={tr("materialName")} /><input type="number" step="any" value={materialPrice} onChange={e => setMaterialPrice(e.target.value)} placeholder={tr("price")} /><select value={materialCurrency} onChange={e => setMaterialCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select><button className="primary" disabled={busy || !materialName.trim()} onClick={addMaterial}>{tr("addMaterial")}</button></div>
       <div className="settings-materials">{materials.map(m => <div key={m.id}><strong>{m.name}</strong> · {editingMaterialId === m.id ? <input type="number" step="any" value={editingMaterialPrice} onChange={e => setEditingMaterialPrice(e.target.value)} /> : <span>{m.defaultPrice} {m.currency}</span>} <button className="ghost small" onClick={() => { if (editingMaterialId === m.id) saveMaterialPrice(m); else { setEditingMaterialId(m.id); setEditingMaterialPrice(String(m.defaultPrice)); } }}>{editingMaterialId === m.id ? tr("saveChanges") : tr("edit")}</button></div>)}</div>
-      <button className="primary" disabled={!isOwner || busy} onClick={saveSpaceSettings}>{tr("saveChanges")}</button>
+      <div className="form-row">
+        <button className="primary" disabled={!isOwner || busy || workspaceArchived} onClick={saveSpaceSettings}>{tr("saveChanges")}</button>
+        {isOwner && !workspaceArchived && <button className="ghost danger" disabled={busy} onClick={archiveCurrentWorkspace}>{language === "ar" ? "أرشفة المساحة" : language === "tr" ? "Alanı arşivle" : "Archive Space"}</button>}
+        {isOwner && workspaceArchived && <button className="primary" disabled={busy} onClick={restoreCurrentWorkspace}>{language === "ar" ? "استعادة المساحة" : language === "tr" ? "Alanı geri yükle" : "Restore Space"}</button>}
+        {!isOwner && <button className="ghost danger" disabled={busy} onClick={leaveCurrentWorkspace}>{language === "ar" ? "مغادرة المساحة" : language === "tr" ? "Alandan ayrıl" : "Leave Space"}</button>}
+      </div>
     </section>}
     <div className="tabs"><button className={merchantTab === "active" ? "tab active-tab" : "tab"} onClick={() => { setMerchantTab("active"); setMerchantSearch(""); }}>{tr("active")} ({merchants.length})</button><button className={merchantTab === "archived" ? "tab active-tab" : "tab"} onClick={() => { setMerchantTab("archived"); setMerchantSearch(""); }}>{tr("archived")} ({archivedMerchants.length})</button></div>
     <input className="merchant-search" value={merchantSearch} onChange={e => setMerchantSearch(e.target.value)} placeholder={tr("searchMerchant")} />

@@ -101,7 +101,7 @@ service cloud.firestore {
     function validEmergencyOwnership(workspaceId) {
       return signedIn() &&
         get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.deputyId == request.auth.uid &&
-        get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerInactivityDays is number &&
+        get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerInactivityDays is int &&
         get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerInactivityDays > 0 &&
         get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerLastActiveAt is timestamp &&
         request.time >= get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerLastActiveAt +

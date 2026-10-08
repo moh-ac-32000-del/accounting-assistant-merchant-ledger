@@ -37,6 +37,12 @@ function validCurrency(value: unknown): value is Currency {
   return value === "TRY" || value === "USD";
 }
 
+function requireOnline() {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    throw new Error("لا يمكن تسجيل البيانات المالية دون اتصال بالإنترنت.");
+  }
+}
+
 function sortNewestFirst(items: Transaction[]) {
   items.sort((a, b) => {
     const dateCompare = b.date.localeCompare(a.date);
@@ -83,6 +89,7 @@ export async function createPurchase(
   userId: string,
   input: PurchaseInput,
 ) {
+  requireOnline();
   if (!db) throw new Error("Firebase is not configured.");
   if (
     !input.materialNameSnapshot.trim() ||
@@ -218,6 +225,7 @@ export async function updateTransaction(
   before: Transaction,
   patch: Record<string, unknown>,
 ) {
+  requireOnline();
   if (!db) throw new Error("Firebase is not configured.");
   if (before.deleted === true) throw new Error("لا يمكن تعديل عملية محذوفة.");
 
@@ -283,6 +291,7 @@ export async function deleteTransaction(
   userId: string,
   transaction: Transaction,
 ) {
+  requireOnline();
   if (!db) throw new Error("Firebase is not configured.");
   if (transaction.deleted === true) return;
 

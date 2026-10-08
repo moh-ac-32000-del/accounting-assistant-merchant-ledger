@@ -34,6 +34,7 @@ export function App() {
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceDefaultCurrency, setWorkspaceDefaultCurrency] = useState<Currency>("TRY");
   const [merchantArchiveDays, setMerchantArchiveDays] = useState(90);
+  const [ownerInactivityDays, setOwnerInactivityDays] = useState(0);
   const [paymentMethods, setPaymentMethods] = useState<Array<{ id: string; name: string; active: boolean }>>([]);
   const [workerPermissions, setWorkerPermissions] = useState({ editDeleteTransactions: true, manageMaterials: true, manageReferencePrices: true, managePaymentMethods: true, manageMerchants: true });
   const [newPaymentMethod, setNewPaymentMethod] = useState("");
@@ -148,6 +149,7 @@ export function App() {
         setWorkspaceName(selected.name);
         setWorkspaceDefaultCurrency((selected as any).defaultCurrency === "USD" ? "USD" : "TRY");
         setMerchantArchiveDays(Number((selected as any).merchantArchiveDays ?? 90));
+        setOwnerInactivityDays(Number((selected as any).ownerInactivityDays ?? 0));
         setPaymentMethods((selected as any).paymentMethods ?? [{ id: "cash", name: "Cash", active: true }]);
         setWorkerPermissions((selected as any).workerPermissions ?? { editDeleteTransactions: true, manageMaterials: true, manageReferencePrices: true, managePaymentMethods: true, manageMerchants: true });
         setDeputyId((selected as any).deputyId ?? null);
@@ -161,9 +163,13 @@ export function App() {
     localStorage.setItem("merchant-ledger-last-space", workspaceId);
     const current = workspaces.find(w => w.id === workspaceId);
     if (current) {
+      if (user && current.ownerId === user.uid) {
+        import("./lib/workspaces").then(({ touchOwnerActivity }) => touchOwnerActivity(workspaceId, user.uid)).catch(() => undefined);
+      }
       setWorkspaceName(current.name);
       setWorkspaceDefaultCurrency((current as any).defaultCurrency === "USD" ? "USD" : "TRY");
       setMerchantArchiveDays(Number((current as any).merchantArchiveDays ?? 90));
+      setOwnerInactivityDays(Number((current as any).ownerInactivityDays ?? 0));
       setPaymentMethods((current as any).paymentMethods ?? [{ id: "cash", name: "Cash", active: true }]);
     }
     listMembers(workspaceId).then(setMembers).catch(() => undefined);
@@ -347,6 +353,27 @@ export function App() {
     }
   }
 
+  async function activateEmergencyOwnership() {
+    if (!workspaceId || !user || isOwner || deputyId !== user.uid) return;
+    if (!window.confirm(language === "ar" ? "تفعيل ملكية الطوارئ الآن؟ ستصبح أنت المالك ويصبح المالك السابق مديرًا." : language === "tr" ? "Acil sahiplik şimdi etkinleştirilsin mi? Siz sahip olursunuz, eski sahip yönetici olur." : "Activate emergency ownership now? You will become Owner and the previous Owner will become Manager.")) return;
+    setBusy(true); setError("");
+    try {
+      const { activateDeputyOwnership } = await import("./lib/workspaces");
+      await activateDeputyOwnership(workspaceId, user.uid);
+      const spaces = await listUserWorkspaces(user.uid);
+      setWorkspaces(spaces);
+      const selected = spaces.find(x => x.id === workspaceId);
+      if (selected) {
+        setWorkspaceName(selected.name);
+        setOwnerInactivityDays(Number((selected as any).ownerInactivityDays ?? 0));
+      }
+    } catch {
+      setError(language === "ar" ? "لا يمكن تفعيل ملكية الطوارئ قبل انتهاء مدة غياب المالك المحددة." : language === "tr" ? "Acil sahiplik, belirlenen sahip hareketsizlik süresi dolmadan etkinleştirilemez." : "Emergency ownership cannot be activated before the configured inactivity period elapses.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function permanentlyDeleteCurrentWorkspace() {
     if (!workspaceId || !user || !isOwner || !workspaceArchived) return;
     const first = window.confirm(language === "ar"
@@ -428,6 +455,7 @@ export function App() {
         name: workspaceName.trim(),
         defaultCurrency: workspaceDefaultCurrency,
         merchantArchiveDays: Math.max(1, Math.floor(merchantArchiveDays)),
+        ownerInactivityDays: Math.max(0, Math.floor(ownerInactivityDays)),
         paymentMethods,
         workerPermissions,
       });
@@ -665,6 +693,8 @@ export function App() {
       <label className="settings-field"><span>{ui.defaultCurrency}</span><select disabled={!isOwner || busy} value={workspaceDefaultCurrency} onChange={e => setWorkspaceDefaultCurrency(e.target.value as Currency)}><option value="TRY">TRY ₺</option><option value="USD">USD $</option></select></label>
       <label className="settings-field"><span>{language === "ar" ? "مدة أرشفة التاجر (أيام)" : language === "tr" ? "Tüccar arşiv süresi (gün)" : "Merchant archive duration (days)"}</span><input type="number" min="1" step="1" disabled={!isOwner || busy || workspaceArchived} value={merchantArchiveDays} onChange={e => setMerchantArchiveDays(Math.max(1, Number(e.target.value) || 1))} /></label>
       <h3>{ui.paymentMethods}</h3>
+      <label className="settings-field"><span>{language === "ar" ? "مدة غياب المالك للطوارئ (0 = معطلة)" : language === "tr" ? "Sahip hareketsizlik süresi (0 = kapalı)" : "Owner inactivity period for emergency (0 = disabled)"}</span><input type="number" min="0" step="1" disabled={!isOwner || busy || workspaceArchived} value={ownerInactivityDays} onChange={e => setOwnerInactivityDays(Math.max(0, Number(e.target.value) || 0))} /></label>
+      {!isOwner && deputyId === user?.uid && <div className="form-row"><button className="ghost danger" disabled={busy || workspaceArchived || ownerInactivityDays <= 0} onClick={activateEmergencyOwnership}>{language === "ar" ? "تفعيل ملكية الطوارئ" : language === "tr" ? "Acil sahipliği etkinleştir" : "Activate emergency ownership"}</button></div>}
       <h3>{language === "ar" ? "الأعضاء" : language === "tr" ? "Üyeler" : "Members"}</h3>
       <div className="settings-materials">{members.map(member => {
         const perms = member.permissions ?? workerPermissions;

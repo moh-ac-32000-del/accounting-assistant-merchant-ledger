@@ -9,7 +9,7 @@ import { createMaterial, subscribeToMaterials, updateMaterial } from "./lib/mate
 import type { AuditEvent, Currency, Material, Merchant, Transaction } from "./lib/types";
 import { LANGUAGE_STORAGE_KEY, translations, type Language, type TranslationKey } from "./lib/i18n";
 import { exportMerchantStatement } from "./lib/export";
-import { shareStatementImage } from "./lib/share";
+import { shareStatementImage, shareTransaction } from "./lib/share";
 import { acceptInvitation, cancelInvitation, createInvitation } from "./lib/invitations";
 import { changeMemberRole, listMembers, removeMember, updateMemberPermissions, type SpaceMember } from "./lib/members";
 

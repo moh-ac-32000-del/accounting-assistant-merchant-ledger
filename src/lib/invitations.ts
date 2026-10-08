@@ -30,7 +30,7 @@ export async function createInvitation(workspaceId: string, userId: string, role
   await setDoc(ref, {
     workspaceId,
     role,
-    createdBy: userId,
+    inviterId: userId,
     createdAt: serverTimestamp(),
     expiresAt,
   });
